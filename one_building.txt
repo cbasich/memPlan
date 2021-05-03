@@ -1,0 +1,17 @@
+X X X X X X X X X X X X X X X
+X X X X X X X X X a X X X X X
+X X X X X X X X X D X X X X X
+X b D . . . . . . . X . . . X
+X X X . . . . . . . D . . . X
+X X X . . . . . . . X . . . X
+X X X . . . X X X X X . . . D
+X X X . . . D c X X X . . . X
+X X X X D X X X X X X X D X X
+X X X . . . X X X d D . . . X
+X X X . . . X X X X X . . . D
+X X X . . . X . . . . . . . X
+X X X . . . D . . . . . . . X
+X X X . . . X . . . . . . . X
+X X X D X X X X X D X X X X X
+X X X e X X X X X f X X X X X
+X X X X X X X X X X X X X X X
