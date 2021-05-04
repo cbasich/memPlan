@@ -395,10 +395,10 @@ function simulate(ℳ::CampusSSP, 𝒱::ValueIterationSolver)
     println("Average cost to goal: $(cost / 100.0)")
 end
 
-function run_CampusSSP()
-    ℳ = build_model("tiny.txt")
-    𝒱 = @time solve_model(ℳ)
-    simulate(ℳ, 𝒱)
-end
+# function run_CampusSSP()
+#     ℳ = build_model("tiny.txt")
+#     𝒱 = @time solve_model(ℳ)
+#     simulate(ℳ, 𝒱)
+# end
 
-run_CampusSSP()
+# run_CampusSSP()

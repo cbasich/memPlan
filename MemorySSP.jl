@@ -264,11 +264,13 @@ function simulate(ℳ::MemorySSP, ℒ::LAOStarSolver, 𝒱::ValueIterationSolver
     M, S, A, C = ℳ.M, ℳ.S, ℳ.A, ℳ.C
     cum_cost = 0.
     # println("Expected cost to goal: $(ℒ.V[index(state, S)])")
-    for i=1:1
+    for i=1:100
+
+        print(i)
         state, true_state, G = ℳ.s₀, M.s₀, M.G
         while true_state ∉ G
             s = index(state, S)
-            a = solve(ℒ, 𝒱, ℳ, s)
+            a, _ = solve(ℒ, 𝒱, ℳ, s)
             action = A[a]
             # println("Taking action $action in memory state $state in true state $true_state.")
             if action.value == "query"
@@ -287,13 +289,13 @@ function simulate(ℳ::MemorySSP, ℒ::LAOStarSolver, 𝒱::ValueIterationSolver
         end
     end
     # println("Reached the goal.")
-    println("Total cumulative cost: $(cum_cost/1.0)")
+    println("Total cumulative cost: $(cum_cost/100.0)")
 end
 
 function build_memory_model(filepath)
     M = build_model(filepath)
     𝒱 = solve_model(M)
-    δ = 3
+    δ = 1 
     S, s₀, G = generate_states(M, δ)
     A = generate_actions(M)
     τ = Dict{Int, Dict{Int, Dict{Int, Float64}}}()
@@ -306,21 +308,22 @@ function solve_model(ℳ, 𝒱)
          zeros(length(ℳ.S)), zeros(length(ℳ.S)),
          zeros(length(ℳ.S)), zeros(length(ℳ.A)))
     S, s = ℳ.S, ℳ.s₀
-    solve(ℒ, 𝒱, ℳ, index(s, S))
+    a, total_expanded = @time solve(ℒ, 𝒱, ℳ, index(s, S))
+    println("LAO* expanded $total_expanded nodes.")
     println("Expected cost to goal: $(ℒ.V[index(s,S)])")
     return ℒ, ℒ.V[index(s, S)]
 end
 
 function run_MemorySSP()
     println("Starting...")
-    ℳ, 𝒱 = @time build_memory_model("single_building.txt")
+    ℳ, 𝒱 = @time build_memory_model("small_campus_new.txt")
     # simulate(ℳ, 𝒱)
     println("Solving...")
     println(length(ℳ.S))
-    ℒ, expected_cost = @time solve_model(ℳ, 𝒱)
+    ℒ, expected_cost = solve_model(ℳ, 𝒱)
     println("Expected cost from initial state: $expected_cost")
     println("Simulating...")
-    simulate(ℳ, ℒ, 𝒱)
+    # simulate(ℳ, ℒ, 𝒱)
 end
 
 run_MemorySSP()

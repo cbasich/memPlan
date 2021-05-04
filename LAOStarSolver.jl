@@ -50,25 +50,28 @@ end
 #     return residual
 # end
 
-function lookahead(ℒ::LAOStarSolver, M, s::Integer, a::Integer)
+function lookahead(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M, s::Integer, a::Integer)
     S, A, T, C, H, V = M.S, M.A, M.T, M.C, M.H, ℒ.V
     T = T(M,S[s],A[a])
 
     q = 0.
     for i=1:length(S)
+        if T[i] == 0
+            continue
+        end
         if i ∈ keys(ℒ.π)
             q += T[i] * V[i]
         else
-            continue
-            # q += T[i] * H(M, V, S[s], A[a])
+            # continue
+            q += T[i] * H(M, 𝒱.V, S[s], A[a])
         end
     end
     return q + C(M,S[s],A[a])
 end
 
-function backup(ℒ::LAOStarSolver, M, s::Integer)
+function backup(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M, s::Integer)
     for a = 1:length(M.A)
-        ℒ.Qs[a] = lookahead(ℒ, M, s, a)
+        ℒ.Qs[a] = lookahead(ℒ, 𝒱, M, s, a)
     end
     a = Base.argmin(ℒ.Qs)
     return a, ℒ.Qs[a]
@@ -78,7 +81,7 @@ function bellman_update(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M, s::In
     # if ℒ.ω ≠ 1.
     #     return weighted_bellman_update(ℒ, 𝒱, M, s)
     # end
-    a, q = backup(ℒ, M, s)
+    a, q = backup(ℒ, 𝒱,  M, s)
     residual = abs(ℒ.V[s] - q)
     ℒ.V[s] = q
     ℒ.π[s] = a
@@ -237,9 +240,9 @@ function solve(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M, s::Integer)
                 break
             end
             if error < ℒ.ϵ
-                return ℒ.π[s]
+                return ℒ.π[s], total_expanded
             end
-            # println(error)
+            println(error)
         end
         # println("END\n")
         iter += 1
@@ -247,5 +250,5 @@ function solve(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M, s::Integer)
     end
     println("Total iterations taken: $iter")
     println("Total nodes expanded: $total_expanded")
-    return ℒ.π[s]
+    return ℒ.π[s], total_expanded
 end
