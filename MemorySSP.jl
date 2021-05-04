@@ -140,7 +140,7 @@ function transitions(ℳ::MemorySSP,
             T[argmax(M.T[s][a])] = 1.
             return T
         else
-            ms′ = length(M.S) + length(M.A) * s + a
+            ms′ = length(M.S) + length(M.A) * (s-1) + a
             T[ms′] = perception_failure_likelihood(state, action)
             for (s′, state′) in enumerate(M.S)
                 T[s′] = M.T[s][a][s′] * (1 - T[ms′])
@@ -156,13 +156,14 @@ function transitions(ℳ::MemorySSP,
     elseif length(state.action_list) == ℳ.δ
         T[index(state, S)] = 1.
     else
+        println("We shouldn't reach here")
         action_list′ = copy(state.action_list)
         push!(action_list′, CampusAction(action.value))
         mstate′ = MemoryState(state.state, action_list′)
-        T[index(mstate′, S)] = 1.0
-        # for s′ = 1:length(M.S)
-        #     T[s′] = 0.1recurse_transition(ℳ, state, action, S[s′])
-        # end
+        T[index(mstate′, S)] = .75
+        for s′ = 1:length(M.S)
+            T[s′] = 0.25recurse_transition(ℳ, state, action, S[s′])
+        end
     end
     return T
 end
@@ -196,8 +197,16 @@ function heuristic(ℳ::MemorySSP,
         actionₚ = MemoryAction(last(state.action_list).value)
         stateₚ = MemoryState(state.state,
                              state.action_list[1:length(state.action_list)-1])
-        return (sum(V[bs] * recurse_transition(ℳ, stateₚ, actionₚ, S[bs])
-                                                 for bs = 1:length(M.S)))
+        h = 0.0
+        for bs = 1:length(M.S)
+            v = V[bs]
+            if v ≠ 0.0
+                h += v * recurse_transition(ℳ, stateₚ, actionₚ, S[bs])
+            end
+        end
+        return h
+        # return (sum(V[bs] * recurse_transition(ℳ, stateₚ, actionₚ, S[bs])
+        #                                          for bs = 1:length(M.S)))
     end
     return 0.
 end
@@ -252,37 +261,39 @@ function simulate(ℳ::MemorySSP, 𝒱::ValueIterationSolver)
 end
 
 function simulate(ℳ::MemorySSP, ℒ::LAOStarSolver, 𝒱::ValueIterationSolver)
-    M, S, A, C, state = ℳ.M, ℳ.S, ℳ.A, ℳ.C, ℳ.s₀
-    true_state, G = M.s₀, M.G
+    M, S, A, C = ℳ.M, ℳ.S, ℳ.A, ℳ.C
     cum_cost = 0.
-    println("Expected cost to goal: $(ℒ.V[index(state, S)])")
-    while true_state ∉ G
-        s = index(state, S)
-        a = solve(ℒ, 𝒱, ℳ, s)
-        action = A[a]
-        println("Taking action $action in memory state $state in true state $true_state.")
-        if action.value == "query"
-            state = MemoryState(true_state, Vector{CampusAction}())
-            cum_cost += 3
-        else
-            true_s = index(true_state, M.S)
-            cum_cost += M.C[true_s][a]
-            state = generate_successor(ℳ, state, A[a])
-            if length(state.action_list) == 0
-                true_state = state.state
+    # println("Expected cost to goal: $(ℒ.V[index(state, S)])")
+    for i=1:1
+        state, true_state, G = ℳ.s₀, M.s₀, M.G
+        while true_state ∉ G
+            s = index(state, S)
+            a = solve(ℒ, 𝒱, ℳ, s)
+            action = A[a]
+            # println("Taking action $action in memory state $state in true state $true_state.")
+            if action.value == "query"
+                state = MemoryState(true_state, Vector{CampusAction}())
+                cum_cost += 3
             else
-                true_state = generate_successor(M, true_s, a)
+                true_s = index(true_state, M.S)
+                cum_cost += M.C[true_s][a]
+                state = generate_successor(ℳ, state, A[a])
+                if length(state.action_list) == 0
+                    true_state = state.state
+                else
+                    true_state = generate_successor(M, true_s, a)
+                end
             end
         end
     end
-    println("Reached the goal.")
-    println("Total cumulative cost: $cum_cost")
+    # println("Reached the goal.")
+    println("Total cumulative cost: $(cum_cost/100.0)")
 end
 
 function build_memory_model(filepath)
     M = build_model(filepath)
     𝒱 = solve_model(M)
-    δ = 1
+    δ =
     S, s₀, G = generate_states(M, δ)
     A = generate_actions(M)
     τ = Dict{Int, Dict{Int, Dict{Int, Float64}}}()
@@ -291,7 +302,7 @@ function build_memory_model(filepath)
 end
 
 function solve_model(ℳ, 𝒱)
-    ℒ = LAOStarSolver(10000, 1000., 1.0, .001, Dict{Integer, Integer}(),
+    ℒ = LAOStarSolver(10000, 1000., 1.0, .0001, Dict{Integer, Integer}(),
          zeros(length(ℳ.S)), zeros(length(ℳ.S)),
          zeros(length(ℳ.S)), zeros(length(ℳ.A)))
     S, s = ℳ.S, ℳ.s₀
@@ -304,6 +315,7 @@ function run_MemorySSP()
     ℳ, 𝒱 = @time build_memory_model("single_building.txt")
     # simulate(ℳ, 𝒱)
     println("Solving...")
+    println(length(ℳ.S))
     ℒ, expected_cost = @time solve_model(ℳ, 𝒱)
     println("Expected cost from initial state: $expected_cost")
     println("Simulating...")
