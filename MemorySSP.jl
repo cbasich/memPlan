@@ -2,6 +2,7 @@ using Combinatorics
 
 import Base.==
 
+include("CampusSSP.jl")
 include("LAOStarSolver.jl")
 
 struct MemoryState
@@ -35,7 +36,7 @@ function generate_states(M::CampusSSP, δ::Integer)
 
     S = Vector{MemoryState}()
     G = Vector{MemoryState}()
-    s₀ = PRESERVE_NONE
+    s₀ = -1 
     for depth in 0:δ
         for (i, state) in enumerate(M.S)
             if depth == 0
@@ -45,7 +46,7 @@ function generate_states(M::CampusSSP, δ::Integer)
                     push!(G, s)
                 end
                 if state == M.s₀
-                    s₀ = s
+                    s₀ = length(S)
                 end
             else
                 for action_list ∈ collect(Base.product(ntuple(i->A, depth)...))
@@ -55,7 +56,7 @@ function generate_states(M::CampusSSP, δ::Integer)
             end
         end
     end
-    return S, s₀, G
+    return S, S[s₀], G
 end
 
 function generate_actions(M::CampusSSP)
@@ -287,13 +288,13 @@ function simulate(ℳ::MemorySSP, ℒ::LAOStarSolver, 𝒱::ValueIterationSolver
         end
     end
     # println("Reached the goal.")
-    println("Total cumulative cost: $(cum_cost/100.0)")
+    println("Total cumulative cost: $(cum_cost/1.0)")
 end
 
 function build_memory_model(filepath)
     M = build_model(filepath)
     𝒱 = solve_model(M)
-    δ =
+    δ = 1
     S, s₀, G = generate_states(M, δ)
     A = generate_actions(M)
     τ = Dict{Int, Dict{Int, Dict{Int, Float64}}}()
@@ -302,17 +303,18 @@ function build_memory_model(filepath)
 end
 
 function solve_model(ℳ, 𝒱)
-    ℒ = LAOStarSolver(10000, 1000., 1.0, .0001, Dict{Integer, Integer}(),
+    ℒ = LAOStarSolver(100000, 1000., 1.0, .001, Dict{Integer, Integer}(),
          zeros(length(ℳ.S)), zeros(length(ℳ.S)),
          zeros(length(ℳ.S)), zeros(length(ℳ.A)))
     S, s = ℳ.S, ℳ.s₀
     solve(ℒ, 𝒱, ℳ, index(s, S))
+    println("Expected cost to goal: $(ℒ.V[index(s,S)])")
     return ℒ, ℒ.V[index(s, S)]
 end
 
 function run_MemorySSP()
     println("Starting...")
-    ℳ, 𝒱 = @time build_memory_model("single_building.txt")
+    ℳ, 𝒱 = @time build_memory_model("tiny.txt")
     # simulate(ℳ, 𝒱)
     println("Solving...")
     println(length(ℳ.S))

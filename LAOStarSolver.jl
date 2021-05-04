@@ -1,4 +1,5 @@
 using Base
+include("ValueIterationSolver.jl")
 
 mutable struct LAOStarSolver
     max_iter::Integer
@@ -58,6 +59,7 @@ function lookahead(ℒ::LAOStarSolver, M, s::Integer, a::Integer)
         if i ∈ keys(ℒ.π)
             q += T[i] * V[i]
         else
+            # continue
             q += T[i] * H(M, V, S[s], A[a])
         end
     end
@@ -88,6 +90,7 @@ function expand(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M,
     if s ∈ visited
         return 0
     end
+    push!(visited, s)
     if M.S[s] ∈ M.G
         return 0
     end
@@ -153,11 +156,11 @@ function test_convergence(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M,
     if s ∈ visited
         return 0.0
     end
-
+    push!(visited, s)
     a = -1
     if s ∈ keys(ℒ.π)
         a = ℒ.π[s]
-        transitions = M.T(M, M.S[v], M.A[a])
+        transitions = M.T(M, M.S[s], M.A[a])
         for s′ = 1:length(M.S)
             if transitions[s′] > 0.0
                 error = max(error, test_convergence(ℒ, 𝒱, M, s′, visited))
@@ -208,25 +211,34 @@ function solve(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M, s::Integer)
     visited = Set{Integer}()
 
     iter = 0
-    error = ℒ.dead_end_cost
     total_expanded = 0
-    num_expanded = 1
 
-    while iter < ℒ.max_iter
-        while num_expanded ≠ 0
+    error = ℒ.dead_end_cost
+    #while iter < ℒ.max_iter
+    while true 
+        while true 
             empty!(visited)
-            num_expanded += expand(ℒ, 𝒱, M, s, visited)
+            num_expanded = expand(ℒ, 𝒱, M, s, visited)
             total_expanded += num_expanded
+            println(num_expanded, "               ", total_expanded)
+            if num_expanded == 0
+                break
+            end
         end
-        while error ≤ ℒ.dead_end_cost
+        while true 
             empty!(visited)
             error = test_convergence(ℒ, 𝒱, M, s, visited)
+            if error > ℒ.dead_end_cost
+                break
+            end
             if error < ℒ.ϵ
                 return ℒ.π[s]
             end
         end
         iter += 1
+        println(iter, "            ", error)
     end
+    println("Total iterations taken: $iter")
     println("Total nodes expanded: $total_expanded")
     return ℒ.π[s]
 end

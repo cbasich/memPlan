@@ -396,7 +396,7 @@ function simulate(ℳ::CampusSSP, 𝒱::ValueIterationSolver)
 end
 
 function run_CampusSSP()
-    ℳ = build_model("single_building.txt")
+    ℳ = build_model("tiny.txt")
     𝒱 = @time solve_model(ℳ)
     simulate(ℳ, 𝒱)
 end
