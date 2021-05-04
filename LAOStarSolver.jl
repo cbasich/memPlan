@@ -59,8 +59,8 @@ function lookahead(ℒ::LAOStarSolver, M, s::Integer, a::Integer)
         if i ∈ keys(ℒ.π)
             q += T[i] * V[i]
         else
-            # continue
-            q += T[i] * H(M, V, S[s], A[a])
+            continue
+            # q += T[i] * H(M, V, S[s], A[a])
         end
     end
     return q + C(M,S[s],A[a])
@@ -148,7 +148,6 @@ end
 function test_convergence(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M,
                           s::Integer, visited::Set{Integer})
     error = 0.0
-
     if M.S[s] ∈ M.G
         return 0.0
     end
@@ -160,6 +159,7 @@ function test_convergence(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M,
     a = -1
     if s ∈ keys(ℒ.π)
         a = ℒ.π[s]
+        # println("a starting as $a for state $s")
         transitions = M.T(M, M.S[s], M.A[a])
         for s′ = 1:length(M.S)
             if transitions[s′] > 0.0
@@ -171,9 +171,12 @@ function test_convergence(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M,
     end
 
     error = max(error, bellman_update(ℒ, 𝒱, M, s))
+    # println("a ending as $(ℒ.π[s]) for state $s")
     if (a == -1 && s ∉ keys(ℒ.π)) || (s ∈ keys(ℒ.π) && a == ℒ.π[s])
         return error
     end
+
+    # println("Action for state $s change from $a to $(ℒ.π[s])")
     return ℒ.dead_end_cost + 1
 end
 
@@ -215,28 +218,32 @@ function solve(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M, s::Integer)
 
     error = ℒ.dead_end_cost
     #while iter < ℒ.max_iter
-    while true 
-        while true 
+    while true
+        while true
             empty!(visited)
             num_expanded = expand(ℒ, 𝒱, M, s, visited)
             total_expanded += num_expanded
-            println(num_expanded, "               ", total_expanded)
+            # println(num_expanded, "               ", total_expanded)
             if num_expanded == 0
                 break
             end
         end
-        while true 
+        # println("\nSTART")
+        while true
             empty!(visited)
             error = test_convergence(ℒ, 𝒱, M, s, visited)
+            # println(error)
             if error > ℒ.dead_end_cost
                 break
             end
             if error < ℒ.ϵ
                 return ℒ.π[s]
             end
+            # println(error)
         end
+        # println("END\n")
         iter += 1
-        println(iter, "            ", error)
+        # println(iter, "            ", error)
     end
     println("Total iterations taken: $iter")
     println("Total nodes expanded: $total_expanded")

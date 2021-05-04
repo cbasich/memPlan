@@ -36,7 +36,7 @@ function generate_states(M::CampusSSP, δ::Integer)
 
     S = Vector{MemoryState}()
     G = Vector{MemoryState}()
-    s₀ = -1 
+    s₀ = -1
     for depth in 0:δ
         for (i, state) in enumerate(M.S)
             if depth == 0
@@ -157,7 +157,6 @@ function transitions(ℳ::MemorySSP,
     elseif length(state.action_list) == ℳ.δ
         T[index(state, S)] = 1.
     else
-        println("We shouldn't reach here")
         action_list′ = copy(state.action_list)
         push!(action_list′, CampusAction(action.value))
         mstate′ = MemoryState(state.state, action_list′)
@@ -294,7 +293,7 @@ end
 function build_memory_model(filepath)
     M = build_model(filepath)
     𝒱 = solve_model(M)
-    δ = 1
+    δ = 3
     S, s₀, G = generate_states(M, δ)
     A = generate_actions(M)
     τ = Dict{Int, Dict{Int, Dict{Int, Float64}}}()
@@ -314,7 +313,7 @@ end
 
 function run_MemorySSP()
     println("Starting...")
-    ℳ, 𝒱 = @time build_memory_model("tiny.txt")
+    ℳ, 𝒱 = @time build_memory_model("single_building.txt")
     # simulate(ℳ, 𝒱)
     println("Solving...")
     println(length(ℳ.S))
