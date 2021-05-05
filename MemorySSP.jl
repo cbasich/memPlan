@@ -235,8 +235,9 @@ end
 function simulate(ℳ::MemorySSP, 𝒱::ValueIterationSolver)
     M, S, A, C, state = ℳ.M, ℳ.S, ℳ.A, ℳ.C, ℳ.s₀
     true_state, G = M.s₀, M.G
-    cum_cost = 0.
+    costs = Vector{Float64}()
     for i = 1:100
+        episode_cost =
         while true_state ∉ G
             if length(state.action_list) > 0
                 cum_cost += 3
@@ -262,12 +263,11 @@ end
 
 function simulate(ℳ::MemorySSP, ℒ::LAOStarSolver, 𝒱::ValueIterationSolver)
     M, S, A, C = ℳ.M, ℳ.S, ℳ.A, ℳ.C
-    cum_cost = 0.
+    costs = Vector{Float64}()
     # println("Expected cost to goal: $(ℒ.V[index(state, S)])")
     for i=1:100
-
-        print(i)
         state, true_state, G = ℳ.s₀, M.s₀, M.G
+        episode_cost = 0.0
         while true_state ∉ G
             s = index(state, S)
             a, _ = solve(ℒ, 𝒱, ℳ, s)
@@ -275,10 +275,10 @@ function simulate(ℳ::MemorySSP, ℒ::LAOStarSolver, 𝒱::ValueIterationSolver
             # println("Taking action $action in memory state $state in true state $true_state.")
             if action.value == "query"
                 state = MemoryState(true_state, Vector{CampusAction}())
-                cum_cost += 3
+                episode_cost += 3
             else
                 true_s = index(true_state, M.S)
-                cum_cost += M.C[true_s][a]
+                episode_cost += M.C[true_s][a]
                 state = generate_successor(ℳ, state, A[a])
                 if length(state.action_list) == 0
                     true_state = state.state
@@ -287,15 +287,16 @@ function simulate(ℳ::MemorySSP, ℒ::LAOStarSolver, 𝒱::ValueIterationSolver
                 end
             end
         end
+        push!(costs, episode_cost)
     end
     # println("Reached the goal.")
-    println("Total cumulative cost: $(cum_cost/100.0)")
+    println("Total cumulative cost: $(mean(costs)) ⨦ $(std(costs))")
 end
 
 function build_memory_model(filepath)
     M = build_model(filepath)
     𝒱 = solve_model(M)
-    δ = 1 
+    δ = 2
     S, s₀, G = generate_states(M, δ)
     A = generate_actions(M)
     τ = Dict{Int, Dict{Int, Dict{Int, Float64}}}()
@@ -323,7 +324,7 @@ function run_MemorySSP()
     ℒ, expected_cost = solve_model(ℳ, 𝒱)
     println("Expected cost from initial state: $expected_cost")
     println("Simulating...")
-    # simulate(ℳ, ℒ, 𝒱)
+    simulate(ℳ, ℒ, 𝒱)
 end
 
 run_MemorySSP()
