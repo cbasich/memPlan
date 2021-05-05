@@ -155,7 +155,7 @@ function transitions(ℳ::MemorySSP,
             T[s′] = recurse_transition(ℳ, stateₚ, actionₚ, S[s′])
         end
     elseif length(state.action_list) == ℳ.δ
-        T[index(state, S)] = 1.
+        T[length(M.S)] = 1.
     else
         action_list′ = copy(state.action_list)
         push!(action_list′, CampusAction(action.value))
@@ -296,7 +296,7 @@ end
 function build_memory_model(filepath)
     M = build_model(filepath)
     𝒱 = solve_model(M)
-    δ = 2
+    δ = 1
     S, s₀, G = generate_states(M, δ)
     A = generate_actions(M)
     τ = Dict{Int, Dict{Int, Dict{Int, Float64}}}()

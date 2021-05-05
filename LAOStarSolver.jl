@@ -174,7 +174,9 @@ function test_convergence(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M,
     end
 
     error = max(error, bellman_update(ℒ, 𝒱, M, s))
-    # println("a ending as $(ℒ.π[s]) for state $s")
+    # if error < .01
+    #     println("a ending as $(M.A[ℒ.π[s]]) for state $(M.S[s]) with error $error.")
+    # end
     if (a == -1 && s ∉ keys(ℒ.π)) || (s ∈ keys(ℒ.π) && a == ℒ.π[s])
         return error
     end
@@ -242,7 +244,7 @@ function solve(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M, s::Integer)
             if error < ℒ.ϵ
                 return ℒ.π[s], total_expanded
             end
-            println(error)
+            println(iter, "            ", error)
         end
         # println("END\n")
         iter += 1
