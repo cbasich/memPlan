@@ -244,7 +244,7 @@ function solve(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M, s::Integer)
             if error < ℒ.ϵ
                 return ℒ.π[s], total_expanded
             end
-            println(iter, "            ", error)
+            # println(iter, "            ", error)
         end
         # println("END\n")
         iter += 1

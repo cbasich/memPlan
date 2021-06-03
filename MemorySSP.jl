@@ -1,9 +1,11 @@
 using Combinatorics
-
+using Statistics
 import Base.==
 
 include("CampusSSP.jl")
 include("LAOStarSolver.jl")
+# include("UCTSolver.jl")
+include("MCTSSolver.jl")
 
 struct MemoryState
     state::CampusState
@@ -211,6 +213,15 @@ function heuristic(ℳ::MemorySSP,
     return 0.
 end
 
+# function U(π, state)
+#     ℳ, V = π.ℳ, π.ℳ.M.V
+#     return max(heuristic(ℳ, V, state, action) for action in ℳ.A)
+# end
+
+function isgoal(ℳ::MemorySSP, state::MemoryState)
+    return state ∈ ℳ.G
+end
+
 function index(element, collection)
     for i=1:length(collection)
         if collection[i] == element
@@ -288,6 +299,42 @@ function simulate(ℳ::MemorySSP, ℒ::LAOStarSolver, 𝒱::ValueIterationSolver
             end
         end
         push!(costs, episode_cost)
+        println("Episode $i           Total cumulative cost: $(mean(costs)) ⨦ $(std(costs))")
+    end
+    # println("Reached the goal.")
+    println("Total cumulative cost: $(mean(costs)) ⨦ $(std(costs))")
+end
+
+function simulate(ℳ::MemorySSP, 𝒱::ValueIterationSolver, π::MCTSSolver)
+    M, S, A, C = ℳ.M, ℳ.S, ℳ.A, ℳ.C
+    costs = Vector{Float64}()
+    # println("Expected cost to goal: $(ℒ.V[index(state, S)])")
+    for i=1:1
+        state, true_state, G = ℳ.s₀, M.s₀, M.G
+        episode_cost = 0.0
+        while true_state ∉ G
+            # s = index(state, S)
+            # a, _ = solve(ℒ, 𝒱, ℳ, s)
+            action = solve(π, state)
+            # action = A[a]
+            println("Taking action $action in memory state $state in true state $true_state.")
+            if action.value == "query"
+                state = MemoryState(true_state, Vector{CampusAction}())
+                episode_cost += 3
+            else
+                true_s = index(true_state, M.S)
+                a = index(action, A)
+                episode_cost += M.C[true_s][a]
+                state = generate_successor(ℳ, state, action)
+                if length(state.action_list) == 0
+                    true_state = state.state
+                else
+                    true_state = generate_successor(M, true_s, action)
+                end
+            end
+        end
+        push!(costs, episode_cost)
+        println("Episode $i           Total cumulative cost: $(mean(costs)) ⨦ $(std(costs))")
     end
     # println("Reached the goal.")
     println("Total cumulative cost: $(mean(costs)) ⨦ $(std(costs))")
@@ -305,14 +352,22 @@ function build_memory_model(filepath)
 end
 
 function solve_model(ℳ, 𝒱)
-    ℒ = LAOStarSolver(100000, 1000., 1.0, .001, Dict{Integer, Integer}(),
-         zeros(length(ℳ.S)), zeros(length(ℳ.S)),
-         zeros(length(ℳ.S)), zeros(length(ℳ.A)))
+    # ℒ = LAOStarSolver(100000, 1000., 1.0, .001, Dict{Integer, Integer}(),
+    #      zeros(length(ℳ.S)), zeros(length(ℳ.S)),
+    #      zeros(length(ℳ.S)), zeros(length(ℳ.A)))
+    # 𝒰 = UCTSolver(zeros(length(ℳ.S)), Set(), 1000, 100, 0)
+    U(state) = minimum(heuristic(ℳ, 𝒱.V, state, action) for action in ℳ.A)
+
+    π = MCTSSolver(ℳ, Dict(), Dict(), U, 10, 10000, 100.0)
     S, s = ℳ.S, ℳ.s₀
-    a, total_expanded = @time solve(ℒ, 𝒱, ℳ, index(s, S))
-    println("LAO* expanded $total_expanded nodes.")
-    println("Expected cost to goal: $(ℒ.V[index(s,S)])")
-    return ℒ, ℒ.V[index(s, S)]
+    # a, total_expanded = @time solve(ℒ, 𝒱, ℳ, index(s, S))
+    # a = @time solve(𝒰, 𝒱, ℳ, )
+    a = @time solve(π, s)
+    return π, a
+    # println("LAO* expanded $total_expanded nodes.")
+    # println("Expected cost to goal: $(ℒ.V[index(s,S)])")
+    # return ℒ, ℒ.V[index(s, S)]
+    # return 𝒰, 𝒰.V[index(s, S)]
 end
 
 function run_MemorySSP()
@@ -321,10 +376,14 @@ function run_MemorySSP()
     # simulate(ℳ, 𝒱)
     println("Solving...")
     println(length(ℳ.S))
-    ℒ, expected_cost = solve_model(ℳ, 𝒱)
+    # ℒ, expected_cost = solve_model(ℳ, 𝒱)
+    # 𝒰, expected_cost = solve_model(ℳ, 𝒱)
+    π, a = solve_model(ℳ, 𝒱)
+    expected_cost = π.Q[(ℳ.s₀, a)]
     println("Expected cost from initial state: $expected_cost")
     println("Simulating...")
-    simulate(ℳ, ℒ, 𝒱)
+    # simulate(ℳ, ℒ, 𝒱)
+    simulate(ℳ, 𝒱, π)
 end
 
 run_MemorySSP()

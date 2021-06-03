@@ -353,6 +353,7 @@ function solve_model(ℳ::CampusSSP)
                   zeros(length(ℳ.S)),
         Vector{Float64}(undef, length(ℳ.A)))
     solve(𝒱, ℳ)
+    ℳ.V = 𝒱.V
     return 𝒱
 end
 
