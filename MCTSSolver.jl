@@ -42,11 +42,10 @@ mutable struct MCTSSolver
 end
 
 function solve(π::MCTSSolver, s)
-    println(s)
     for k = 1:π.m
         rollout!(π, s)
     end
-    println(π.Q)
+    println(minimum(a->π.Q[(s,a)], π.ℳ.A))
     return argmin(a->π.Q[(s,a)], π.ℳ.A)
 end
 
@@ -60,12 +59,14 @@ function rollout!(π::MCTSSolver, s, d=π.d)
     if !haskey(N, (s, first(A)))
         for a in A
             N[(s,a)] = 0
-            Q[(s,a)] = 0.0
+            Q[(s,a)] = π.U(s, a)
         end
+        # println(π.U(s))
         return π.U(s)
     end
 
     a = select_action(π, s)
+    # println(s, a)
     s′ = generate_successor(ℳ, s, a)
     r = ℳ.C(ℳ, s, a)                # This is actually a positive cost.
     q = r + rollout!(π, s′, d-1)

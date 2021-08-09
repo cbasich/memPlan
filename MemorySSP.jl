@@ -329,7 +329,7 @@ function simulate(ℳ::MemorySSP, 𝒱::ValueIterationSolver, π::MCTSSolver)
                 if length(state.action_list) == 0
                     true_state = state.state
                 else
-                    true_state = generate_successor(M, true_s, action)
+                    true_state = generate_successor(M, true_s, a)
                 end
             end
         end
@@ -357,6 +357,7 @@ function solve_model(ℳ, 𝒱)
     #      zeros(length(ℳ.S)), zeros(length(ℳ.A)))
     # 𝒰 = UCTSolver(zeros(length(ℳ.S)), Set(), 1000, 100, 0)
     U(state) = minimum(heuristic(ℳ, 𝒱.V, state, action) for action in ℳ.A)
+    U(state, action) = heuristic(ℳ, 𝒱.V, state, action)
 
     π = MCTSSolver(ℳ, Dict(), Dict(), U, 10, 10000, 100.0)
     S, s = ℳ.S, ℳ.s₀
