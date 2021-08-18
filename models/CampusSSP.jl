@@ -1,4 +1,4 @@
-include("ValueIterationSolver.jl")
+include(joinpath(@__DIR__, "..", "solvers", "ValueIterationSolver.jl"))
 
 struct CampusState
     x::Integer
@@ -12,7 +12,7 @@ struct CampusAction
 end
 
 struct CampusSSP
-    S::Vector{CampusState} # state space
+    S::Vector{CampusState}
     A::Vector{CampusAction}
     T
     C

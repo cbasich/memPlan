@@ -3,9 +3,8 @@ using Statistics
 import Base.==
 
 include("CampusSSP.jl")
-include("LAOStarSolver.jl")
-# include("UCTSolver.jl")
-include("MCTSSolver.jl")
+include(joinpath("..", "solvers", "LAOStarSolver.jl"))
+include(joinpath("..", "solvers", "MCTSSolver.jl"))
 
 struct MemoryState
     state::CampusState
