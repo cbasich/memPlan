@@ -1,4 +1,16 @@
+using Combinatorics
+using Statistics
+
 include(joinpath(@__DIR__, "..", "solvers", "ValueIterationSolver.jl"))
+
+function index(element, collection)
+    for i=1:length(collection)
+        if collection[i] == element
+            return i
+        end
+    end
+    return -1
+end
 
 struct DomainState
     x::Integer
@@ -20,20 +32,32 @@ struct MDP
     s₀
 end
 
-function generate_people_smoke_level_vector()
+# Not sure if there is a better way than manually setting this?
+people_locations = [(1,1), (2,2), (3,3)]
 
+function generate_people_smoke_level_vector(grid::Vector{Vector{Any}})
+    𝒫 = Vector{Int}()
+    for loc in people_locations
+        push!(grid[loc[1]][loc[2]], 𝒫)
+    end
 end
 
-function generate_states(grid::Vector{Vector{Char}})
-    S = Vector{CampusState}()
+function generate_grid(filename::String)
+    grid = Vector{Vector{Any}}()
+    open(filename) do file
+        for l in eachline(file)
+            row = collect(l)
+            deleteat!(row, row .== ' ')
+            push!(grid, row)
+        end
+    end
+    return grid
+end
 
-    # For computation and logic sake, instead of having a vector of binaries
-    # to indicate which people have been aided, we will instead of a vector of
-    # INTs, where each INT is either 0 or the smoke level of the location
-    # where each person is. Then, when you aid, it sets that value to 0
-    # which will incur 0 cost for that person, so the system will not need to
-    # do anything more with that person. I.E., the behavior is the same.
-    people_smoke_level_vector = generate_people_smoke_level_vector()
+function generate_states(grid::Vector{Vector{Any}})
+    S = Vector{CampusState}()
+    𝒫 = generate_people_smoke_level_vector(grid)
+    num_people = length(people_smoke_level_vector)
 
     for (i, row) in enumerate(grid)
         for (j, loc) in enumerate(row)
@@ -41,13 +65,15 @@ function generate_states(grid::Vector{Vector{Char}})
                 continue
             end
             if loc == 'S'
-                s₀ = CampusState(i, j, '→', 0, people_smoke_level_vector)
+                s₀ = CampusState(i, j, '→', 0, 𝒫)
                 push!(S, s₀)
             end
             for θ in ['↑', '↓', '→', '←']
-                push!(S, CampusState(i, j, θ, loc, people_smoke_level_vector))
-                # Insert logic here for generating all of the people smoke level
-                # vectors to add to the state space.
+                for mask in collect(combinations(1:num_people))
+                    P = copy(𝒫)
+                    B[mask] .= 0
+                    push!(S, CampusState(i, j, θ, loc, P))
+                end
             end
         end
     end
@@ -117,11 +143,11 @@ function move_distribution(s::DomainState,
 
         if state == state′
             distr[s′] = 0.1
-        elseif state′.x == xpr and state′.y == ypr
+        elseif state′.x == xpr && state′.y == ypr
             distr[s′] = 0.05
-        elseif state′.x == xpl and state′.y == ypl
+        elseif state′.x == xpl && state′.y == ypl
             distr[s′] = 0.05
-        elseif state′.x == xp and state′.y == yp
+        elseif state′.x == xp && state′.y == yp
             distr[s′] = 0.8
         end
     end
@@ -134,8 +160,8 @@ function aid_distribution(s::DomainState,
     distr = zeros(length(S))
 
     loc = (state.x, state.y)
-    for i = 1:length(...)
-        if ...[i] == loc
+    for i = 1:length(people_locations)
+        if people_locations[i] == loc
             𝒫′ = copy(s.𝒫)
             𝒫′[i] = 0
             break
@@ -177,8 +203,8 @@ function generate_transitions(S::Vector{DomainState},
     return T
 end
 
-function generate_rewards(S::Vector{CampusState},
-                          A::Vector{CampusAction})
+function generate_rewards(S::Vector{DomainState},
+                          A::Vector{DomainAction})
     R = [[-1.0 for (i, _) in enumerate(A)]
                for (j, _) in enumerate(S)]
 
@@ -209,17 +235,28 @@ function check_transition_validity(T, S, A)
     end
 end
 
-function build_model()
-
+function build_model(filepath::String)
+    grid = generate_grid(filepath)
+    S, s₀ = generate_states(grid)
+    A = generate_actions()
+    T = generate_transitions(S, A)
+    check_transition_validity(T, S, A)
+    R = generate_rewards(S, A)
+    ℳ = MDP(S, A, T, R, s₀)
+    return ℳ
 end
 
-function solve_model()
-
+function solve_model(ℳ::MDP)
+    𝒱 = ValueIterationSolver(.001,
+                             true,
+                             Dict{Integer,Integer}(),
+                             zeros(length(ℳ.S)),
+                             Vector{Float64}(undef, length(ℳ.A)))
+    solve(𝒱, ℳ)
+    return 𝒱
 end
 
-function run()
+function main()
     domain_map_file = ""
-    domain_info_file = ""
-
-
+    ℳ = build_model(domain_map_file)
 end
