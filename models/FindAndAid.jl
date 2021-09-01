@@ -14,16 +14,16 @@ function index(element, collection)
     return -1
 end
 
-function ==(a::DomainState, b::DomainState)
-    return a.x == b.x && a.y == b.y && a.θ == b.θ && a.ℒ == b.ℒ && a.𝒫 == b.𝒫
-end
-
 struct DomainState
     x::Integer
     y::Integer
     θ::Char
     ℒ::Integer
     𝒫::Vector{Integer}
+end
+
+function ==(a::DomainState, b::DomainState)
+    return a.x == b.x && a.y == b.y && a.θ == b.θ && a.ℒ == b.ℒ && a.𝒫 == b.𝒫
 end
 
 struct DomainAction
@@ -37,9 +37,6 @@ struct MDP
     R
     s₀
 end
-
-# Not sure if there is a better way than manually setting this?
-people_locations = [(2,2), (4,5)]
 
 function generate_people_smoke_level_vector(grid::Vector{Vector{Any}})
     𝒫 = Vector{Int}()
@@ -74,14 +71,13 @@ function generate_states(grid::Vector{Vector{Any}})
             end
             if loc == 'S'
                 s₀ = DomainState(i, j, '↑', 0, 𝒫)
+                loc = '0'
             end
             for θ in ['↑', '↓', '→', '←']
+                push!(S, DomainState(i, j, θ, parse(Int, loc), 𝒫))
                 for mask in collect(combinations(1:num_people))
                     P = copy(𝒫)
                     P[mask] .= 0
-                    if loc == 'S'
-                        loc = '0'
-                    end
                     push!(S, DomainState(i, j, θ, parse(Int, loc), P))
                 end
             end
@@ -162,7 +158,7 @@ function move_distribution(state::DomainState,
         end
     end
 
-    distr[index(state, S)] = 1.0 - sum(distr)
+    distr[index(state, S)] += 1.0 - sum(distr)
 
     return distr
 end
@@ -170,22 +166,15 @@ end
 function aid_distribution(state::DomainState,
                           S::Vector{DomainState})
     distr = zeros(length(S))
-    if sum(state.𝒫) == 0
-        distr[index(state, S)] = 1.0
-        return distr
-    end
-
     loc = (state.x, state.y)
-    𝒫′ = copy(state.𝒫)
-    for i = 1:length(people_locations)
-        if people_locations[i] == loc
-            𝒫′[i] = 0
-            break
-        end
+
+    if sum(state.𝒫) == 0 || loc ∉ people_locations
         distr[index(state, S)] = 1.0
         return distr
     end
 
+    𝒫′ = copy(state.𝒫)
+    𝒫′[index(loc, people_locations)] = 0
     s′ = DomainState(state.x, state.y, state.θ, state.ℒ, 𝒫′)
     distr[index(s′, S)] = 1.0
     return distr
@@ -198,10 +187,6 @@ function generate_transitions(S::Vector{DomainState},
                for (k, _) in enumerate(S)]
 
     for (s, state) in enumerate(S)
-        # if goal_condition(state)
-        #     T[s, :, s] .= 1.0
-        #     continue
-        # end
         for (a, action) in enumerate(A)
             if action.value == "aid"
                 T[s][a] = aid_distribution(state, S)
@@ -242,7 +227,7 @@ function check_transition_validity(T, S, A)
                 end
                 return 0.
             end
-            if round(sum(T[i][j])) == 1.
+            if sum(T[i][j]) == 1.
                 continue
             else
                 println("Transition error at state index $i and action index $j")
@@ -279,10 +264,48 @@ function solve_model(ℳ::MDP)
     return 𝒱
 end
 
+function generate_successor(ℳ::MDP, s::Int, a::Int)
+    thresh = rand()
+    p = 0.
+    for (s′, state′) ∈ enumerate(ℳ.S)
+        p += ℳ.T[s][a][s′]
+        if p >= thresh
+            return state′
+        end
+    end
+    println("Getting here?    $p     $(sum(ℳ.T[s][a]))")
+    println("state $s and action $a")
+end
+
+function simulate(ℳ::MDP, 𝒱::ValueIterationSolver)
+    S, A, R = ℳ.S, ℳ.A, ℳ.R
+    r = 0.
+    for i=1:1
+        state = ℳ.s₀
+        println("Expected reward: $(𝒱.V[index(state, S)])")
+        while true
+            s = index(state, S)
+            a = 𝒱.π[s]
+            r += R[s][a]
+            println("Taking action $(A[a]) in state $state.")
+            state = generate_successor(ℳ, s, a)
+            if sum(state.𝒫) == 0
+                break
+            end
+        end
+        # println("Reached the goal with total cost $cost.")
+    end
+    println("Average reward: $(r / 100.0)")
+end
+
+# Not sure if there is a better way than manually setting this?
+people_locations = [(2,2), (4,5)]
+
 function main()
     domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_1.txt")
     ℳ = build_model(domain_map_file)
     𝒱 = solve_model(ℳ)
+    simulate(ℳ, 𝒱)
 end
 
 main()
