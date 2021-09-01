@@ -12,15 +12,15 @@ end
 # end
 
 function lookahead(𝒱::ValueIterationSolver, M, s::Integer, a::Integer)
-    S, T, C, V = M.S, M.T, M.C, 𝒱.V
-    return C[s][a] + 0.99 * sum(T[s][a][s′] * V[s′] for s′=1:length(S))
+    S, T, R, V = M.S, M.T, M.R, 𝒱.V
+    return R[s][a] + 0.99 * sum(T[s][a][s′] * V[s′] for s′=1:length(S))
 end
 
 function backup(𝒱::ValueIterationSolver, M, s::Integer)
     for a = 1:length(M.A)
         𝒱.Qs[a] = lookahead(𝒱, M, s, a)
     end
-    a = Base.argmin(𝒱.Qs)
+    a = Base.argmax(𝒱.Qs)
     q = 𝒱.Qs[a]
     return a, q
 end
@@ -33,6 +33,7 @@ function solve(𝒱::ValueIterationSolver, M)
         for s = 1:length(M.S)
             a, q = backup(𝒱, M, s)
             residual = max(residual, abs(𝒱.V[s] - q))
+            println(residual)
             𝒱.V[s] = q
             𝒱.π[s] = a
         end
