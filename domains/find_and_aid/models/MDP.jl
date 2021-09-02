@@ -3,7 +3,7 @@ using Statistics
 
 import Base.==
 
-include(joinpath(@__DIR__, "..", "solvers", "ValueIterationSolver.jl"))
+include(joinpath(@__DIR__, "..", "..", "..", "solvers", "VIMDPSolver.jl"))
 
 function index(element, collection)
     for i=1:length(collection)
@@ -309,3 +309,38 @@ function main()
 end
 
 main()
+
+
+function generate_map(h::Int, w::Int)
+    seed = abs(rand(Int))
+    MT = MersenneTwister(seed)
+    save_path = joinpath(@__DIR__, "..", "maps", "collapse_$seed.txt")
+    io = open(save_path, "w")
+    for i = 1:h
+        for j = 1:w
+            if i == 1 || i == h
+                write(io, 'X')
+            elseif j == 1 || j == w
+                write(io, 'X')
+            else
+                p = rand(MT)
+                if p < 0.4
+                    write(io, '0')
+                elseif p < 0.6
+                    write(io, '1')
+                elseif p < 0.75
+                    write(io, '2')
+                elseif p < 0.85
+                    write(io, '3')
+                else
+                    write(io, 'X')
+                end
+            end
+            write(io, ' ')
+        end
+        write(io, '\n')
+    end
+    close(io)
+end
+
+generate_map(20, 20)
