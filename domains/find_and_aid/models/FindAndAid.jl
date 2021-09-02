@@ -299,7 +299,7 @@ function simulate(ℳ::MDP, 𝒱::ValueIterationSolver)
 end
 
 # Not sure if there is a better way than manually setting this?
-people_locations = [(2,2), (4,5)]
+people_locations = [(2,2), (4,7), (4,8)]
 
 function main()
     domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_1.txt")
