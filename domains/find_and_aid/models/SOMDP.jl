@@ -3,7 +3,8 @@ using Statistics
 import Base.==
 
 include("MDP.jl")
-# include(joinpath(@__DIR__, "..", "..", "..", "solvers", "VIMDPSolver.jl"))
+include(joinpath(@__DIR__, "..", "..", "..", "solvers", "VIMDPSolver.jl"))
+include(joinpath(@__DIR__, "..", "..", "..", "solvers", "LAOStarSolver.jl"))
 
 function index(element, collection)
     for i=1:length(collection)
@@ -75,7 +76,7 @@ end
 
 function eta(state::MemoryState,
             action::MemoryAction)
-    return 0.1
+    return 0.3 * state.ℒ
 end
 
 function recurse_transition(ℳ::SOMDP,
@@ -243,80 +244,80 @@ function simulate(ℳ::SOMDP,
     println("Average cost to goal: $cum_cost")
 end
 
-function simulate(ℳ::MemorySSP, ℒ::LAOStarSolver, 𝒱::ValueIterationSolver)
-    M, S, A, C = ℳ.M, ℳ.S, ℳ.A, ℳ.C
-    costs = Vector{Float64}()
-    # println("Expected cost to goal: $(ℒ.V[index(state, S)])")
-    for i=1:100
-        state, true_state, G = ℳ.s₀, M.s₀, M.G
-        episode_cost = 0.0
-        while true_state ∉ G
-            s = index(state, S)
-            a, _ = solve(ℒ, 𝒱, ℳ, s)
-            action = A[a]
-            # println("Taking action $action in memory state $state in true state $true_state.")
-            if action.value == "query"
-                state = MemoryState(true_state, Vector{CampusAction}())
-                episode_cost += 3
-            else
-                true_s = index(true_state, M.S)
-                episode_cost += M.C[true_s][a]
-                state = generate_successor(ℳ, state, A[a])
-                if length(state.action_list) == 0
-                    true_state = state.state
-                else
-                    true_state = generate_successor(M, true_s, a)
-                end
-            end
-        end
-        push!(costs, episode_cost)
-        println("Episode $i           Total cumulative cost: $(mean(costs)) ⨦ $(std(costs))")
-    end
-    # println("Reached the goal.")
-    println("Total cumulative cost: $(mean(costs)) ⨦ $(std(costs))")
-end
-
-function simulate(ℳ::MemorySSP, 𝒱::ValueIterationSolver, π::MCTSSolver)
-    M, S, A, C = ℳ.M, ℳ.S, ℳ.A, ℳ.C
-    costs = Vector{Float64}()
-    # println("Expected cost to goal: $(ℒ.V[index(state, S)])")
-    for i=1:1
-        state, true_state, G = ℳ.s₀, M.s₀, M.G
-        episode_cost = 0.0
-        while true_state ∉ G
-            # s = index(state, S)
-            # a, _ = solve(ℒ, 𝒱, ℳ, s)
-            action = solve(π, state)
-            # action = A[a]
-            println("Taking action $action in memory state $state in true state $true_state.")
-            if action.value == "query"
-                state = MemoryState(true_state, Vector{CampusAction}())
-                episode_cost += 3
-            else
-                true_s = index(true_state, M.S)
-                a = index(action, A)
-                episode_cost += M.C[true_s][a]
-                state = generate_successor(ℳ, state, action)
-                if length(state.action_list) == 0
-                    true_state = state.state
-                else
-                    true_state = generate_successor(M, true_s, a)
-                end
-            end
-        end
-        push!(costs, episode_cost)
-        println("Episode $i           Total cumulative cost: $(mean(costs)) ⨦ $(std(costs))")
-    end
-    # println("Reached the goal.")
-    println("Total cumulative cost: $(mean(costs)) ⨦ $(std(costs))")
-end
+# function simulate(ℳ::MemorySSP, ℒ::LAOStarSolver, 𝒱::ValueIterationSolver)
+#     M, S, A, C = ℳ.M, ℳ.S, ℳ.A, ℳ.C
+#     costs = Vector{Float64}()
+#     # println("Expected cost to goal: $(ℒ.V[index(state, S)])")
+#     for i=1:100
+#         state, true_state, G = ℳ.s₀, M.s₀, M.G
+#         episode_cost = 0.0
+#         while true_state ∉ G
+#             s = index(state, S)
+#             a, _ = solve(ℒ, 𝒱, ℳ, s)
+#             action = A[a]
+#             # println("Taking action $action in memory state $state in true state $true_state.")
+#             if action.value == "query"
+#                 state = MemoryState(true_state, Vector{CampusAction}())
+#                 episode_cost += 3
+#             else
+#                 true_s = index(true_state, M.S)
+#                 episode_cost += M.C[true_s][a]
+#                 state = generate_successor(ℳ, state, A[a])
+#                 if length(state.action_list) == 0
+#                     true_state = state.state
+#                 else
+#                     true_state = generate_successor(M, true_s, a)
+#                 end
+#             end
+#         end
+#         push!(costs, episode_cost)
+#         println("Episode $i           Total cumulative cost: $(mean(costs)) ⨦ $(std(costs))")
+#     end
+#     # println("Reached the goal.")
+#     println("Total cumulative cost: $(mean(costs)) ⨦ $(std(costs))")
+# end
+#
+# function simulate(ℳ::MemorySSP, 𝒱::ValueIterationSolver, π::MCTSSolver)
+#     M, S, A, C = ℳ.M, ℳ.S, ℳ.A, ℳ.C
+#     costs = Vector{Float64}()
+#     # println("Expected cost to goal: $(ℒ.V[index(state, S)])")
+#     for i=1:1
+#         state, true_state, G = ℳ.s₀, M.s₀, M.G
+#         episode_cost = 0.0
+#         while true_state ∉ G
+#             # s = index(state, S)
+#             # a, _ = solve(ℒ, 𝒱, ℳ, s)
+#             action = solve(π, state)
+#             # action = A[a]
+#             println("Taking action $action in memory state $state in true state $true_state.")
+#             if action.value == "query"
+#                 state = MemoryState(true_state, Vector{CampusAction}())
+#                 episode_cost += 3
+#             else
+#                 true_s = index(true_state, M.S)
+#                 a = index(action, A)
+#                 episode_cost += M.C[true_s][a]
+#                 state = generate_successor(ℳ, state, action)
+#                 if length(state.action_list) == 0
+#                     true_state = state.state
+#                 else
+#                     true_state = generate_successor(M, true_s, a)
+#                 end
+#             end
+#         end
+#         push!(costs, episode_cost)
+#         println("Episode $i           Total cumulative cost: $(mean(costs)) ⨦ $(std(costs))")
+#     end
+#     # println("Reached the goal.")
+#     println("Total cumulative cost: $(mean(costs)) ⨦ $(std(costs))")
+# end
 
 function build_model(M::MDP)
     δ = 1
     S, s₀ = generate_states(M, δ)
     A = generate_actions(M)
     τ = Dict{Int, Dict{Int, Dict{Int, Float64}}}()
-    ℳ = MemorySSP(M, S, A, generate_transitions, generate_reward,s₀
+    ℳ = MemorySSP(M, S, A, generate_transitions, generate_reward, s₀,
                    τ, δ, generate_heuristic)
     return ℳ, 𝒱
 end
@@ -348,7 +349,7 @@ function main()
     M = build_model(domain_map_file)
     V = solve_model(M)
 
-    ℳ, 𝒱 = @time build_memory_model("small_campus_new.txt")
+    ℳ, 𝒱 = @time build_model(M)
     # simulate(ℳ, 𝒱)
     println("Solving...")
     println(length(ℳ.S))
@@ -362,4 +363,4 @@ function main()
     simulate(ℳ, 𝒱, π)
 end
 
-run_MemorySSP()
+main()

@@ -1,5 +1,5 @@
 using Base
-include("ValueIterationSolver.jl")
+include("VIMDPSolver.jl")
 
 mutable struct LAOStarSolver
     max_iter::Integer
@@ -50,8 +50,12 @@ end
 #     return residual
 # end
 
-function lookahead(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M, s::Integer, a::Integer)
-    S, A, T, C, H, V = M.S, M.A, M.T, M.C, M.H, ℒ.V
+function lookahead(ℒ::LAOStarSolver,
+                   𝒱::ValueIterationSolver,
+                   M,
+                   s::Integer,
+                   a::Integer)
+    S, A, T, R, H, V = M.S, M.A, M.T, M.R, M.H, ℒ.V
     T = T(M,S[s],A[a])
 
     q = 0.
@@ -66,18 +70,24 @@ function lookahead(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M, s::Integer
             q += T[i] * H(M, 𝒱.V, S[s], A[a])
         end
     end
-    return q + C(M,S[s],A[a])
+    return q + R(M,S[s],A[a])
 end
 
-function backup(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M, s::Integer)
+function backup(ℒ::LAOStarSolver,
+                𝒱::ValueIterationSolver,
+                M,
+                s::Integer)
     for a = 1:length(M.A)
         ℒ.Qs[a] = lookahead(ℒ, 𝒱, M, s, a)
     end
-    a = Base.argmin(ℒ.Qs)
+    a = Base.argmax(ℒ.Qs)
     return a, ℒ.Qs[a]
 end
 
-function bellman_update(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M, s::Integer)
+function bellman_update(ℒ::LAOStarSolver,
+                        𝒱::ValueIterationSolver,
+                        M,
+                        s::Integer)
     # if ℒ.ω ≠ 1.
     #     return weighted_bellman_update(ℒ, 𝒱, M, s)
     # end
@@ -94,9 +104,9 @@ function expand(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M,
         return 0
     end
     push!(visited, s)
-    if M.S[s] ∈ M.G
-        return 0
-    end
+    # if M.S[s] ∈ M.G
+    #     return 0
+    # end
 
     count = 0
     if s ∉ keys(ℒ.π)
@@ -148,12 +158,15 @@ end
 #     return count
 # end
 
-function test_convergence(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M,
-                          s::Integer, visited::Set{Integer})
+function test_convergence(ℒ::LAOStarSolver,
+                          𝒱::ValueIterationSolver,
+                          M,
+                          s::Integer,
+                          visited::Set{Integer})
     error = 0.0
-    if M.S[s] ∈ M.G
-        return 0.0
-    end
+    # if M.S[s] ∈ M.G
+    #     return 0.0
+    # end
 
     if s ∈ visited
         return 0.0
@@ -214,7 +227,10 @@ end
 #     return error
 # end
 
-function solve(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M, s::Integer)
+function solve(ℒ::LAOStarSolver,
+               𝒱::ValueIterationSolver,
+               M,
+               s::Integer)
     expanded = 0
     visited = Set{Integer}()
 
