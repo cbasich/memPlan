@@ -1,5 +1,7 @@
 using Combinatorics
 using Statistics
+using Random
+
 import Base.==
 
 include("MDP.jl")
@@ -44,16 +46,12 @@ function generate_states(M::MDP, δ::Integer)
     A = M.A
 
     S = Vector{MemoryState}()
-    G = Vector{MemoryState}()
     s₀ = -1
     for depth in 0:δ
         for (i, state) in enumerate(M.S)
             if depth == 0
                 s = MemoryState(state, Vector{DomainAction}())
                 push!(S, s)
-                if state in M.G
-                    push!(G, s)
-                end
                 if state == M.s₀
                     s₀ = length(S)
                 end
@@ -65,7 +63,13 @@ function generate_states(M::MDP, δ::Integer)
             end
         end
     end
-    return S, S[s₀], G
+    push!(S, MemoryState(DomainState(-1, -1, '↑', -1, Integer[-1,-1,-1]),
+                         DomainAction[DomainAction("aid")]))
+    return S, S[s₀]
+end
+
+function terminal(state::MemoryState)
+    return terminal(state.state)
 end
 
 function generate_actions(M::MDP)
@@ -74,9 +78,9 @@ function generate_actions(M::MDP)
     return A
 end
 
-function eta(state::MemoryState,
-            action::MemoryAction)
-    return 0.3 * state.ℒ
+function eta(action::MemoryAction,
+             state′::MemoryState)
+    return 0.3 * state′.state.𝓁
 end
 
 function recurse_transition(ℳ::SOMDP,
@@ -84,6 +88,7 @@ function recurse_transition(ℳ::SOMDP,
                         action::MemoryAction,
                         state′::MemoryState)::Float64
     s, a, s′ = index(state, ℳ.S), index(action, ℳ.A), index(state′, ℳ.S)
+
     if isempty(state.action_list)
         return ℳ.M.T[s][a][s′]
     end
@@ -121,6 +126,10 @@ function generate_transitions(ℳ::SOMDP,
                           action::MemoryAction)
     M, S, A = ℳ.M, ℳ.S, ℳ.A
     T = zeros(length(S))
+    if state.state.x == -1
+        T[length(ℳ.S)] = 1.0
+        return T
+    end
     if isempty(state.action_list)
         s, a = index(state, S), index(action, A)
         if action.value == "QUERY"
@@ -131,7 +140,7 @@ function generate_transitions(ℳ::SOMDP,
             return T
         else
             ms′ = length(M.S) + length(M.A) * (s-1) + a
-            T[ms′] = eta(state, action)
+            T[ms′] = eta(action, ℳ.S[ms′])
             for (s′, state′) in enumerate(M.S)
                 T[s′] = M.T[s][a][s′] * (1 - T[ms′])
             end
@@ -144,11 +153,14 @@ function generate_transitions(ℳ::SOMDP,
             T[s′] = recurse_transition(ℳ, stateₚ, actionₚ, S[s′])
         end
     elseif length(state.action_list) == ℳ.δ
-        T[length(M.S)] = 1.
+        T[length(ℳ.S)] = 1.
     else
         action_list′ = copy(state.action_list)
         push!(action_list′, DomainAction(action.value))
         mstate′ = MemoryState(state.state, action_list′)
+        ## TODO: Below, we assume a fixed value of gaining observability from a
+        ##       memory state. THis part should be changed to be based on eta
+        ##       of belief state of the memory state.
         T[index(mstate′, S)] = .75
         for s′ = 1:length(M.S)
             T[s′] = 0.25recurse_transition(ℳ, state, action, S[s′])
@@ -161,16 +173,19 @@ function generate_reward(ℳ::SOMDP,
                       state::MemoryState,
                      action::MemoryAction)
     M, S, A = ℳ.M, ℳ.S, ℳ.A
+    if state.state.x == -1
+        return -10
+    end
     if action.value == "QUERY"
-        return 3.  ## TODO: Adjust this cost somehow??
+        return -3.  ## TODO: Adjust this cost somehow??
     elseif length(state.action_list) == 0
-        return M.C[index(state, S)][index(action, A)]
+        return M.R[index(state, S)][index(action, A)]
     else
         a = index(action, A)
         actionₚ = MemoryAction(last(state.action_list).value)
         stateₚ = MemoryState(state.state,
                              state.action_list[1:length(state.action_list)-1])
-        return (sum(M.C[bs][a] * recurse_transition(ℳ, stateₚ, actionₚ, S[bs])
+        return (sum(M.R[bs][a] * recurse_transition(ℳ, stateₚ, actionₚ, S[bs])
                                                       for bs = 1:length(M.S)))
     end
 end
@@ -180,6 +195,9 @@ function generate_heuristic(ℳ::SOMDP,
                          state::MemoryState,
                         action::MemoryAction)
     M, S, A = ℳ.M, ℳ.S, ℳ.A
+    if state.state.x == -1
+        return 0.
+    end
     if length(state.action_list) == 0
         return V[index(state, S)]
     else
@@ -205,7 +223,7 @@ function generate_successor(ℳ::SOMDP,
                         action::MemoryAction)
     thresh = rand()
     p = 0.
-    T = ℳ.T(ℳ, s, a)
+    T = ℳ.T(ℳ, state, action)
     for (s′, state′) ∈ enumerate(ℳ.S)
         p += T[s′]
         if p >= thresh
@@ -244,38 +262,46 @@ function simulate(ℳ::SOMDP,
     println("Average cost to goal: $cum_cost")
 end
 
-# function simulate(ℳ::MemorySSP, ℒ::LAOStarSolver, 𝒱::ValueIterationSolver)
-#     M, S, A, C = ℳ.M, ℳ.S, ℳ.A, ℳ.C
-#     costs = Vector{Float64}()
-#     # println("Expected cost to goal: $(ℒ.V[index(state, S)])")
-#     for i=1:100
-#         state, true_state, G = ℳ.s₀, M.s₀, M.G
-#         episode_cost = 0.0
-#         while true_state ∉ G
-#             s = index(state, S)
-#             a, _ = solve(ℒ, 𝒱, ℳ, s)
-#             action = A[a]
-#             # println("Taking action $action in memory state $state in true state $true_state.")
-#             if action.value == "query"
-#                 state = MemoryState(true_state, Vector{CampusAction}())
-#                 episode_cost += 3
-#             else
-#                 true_s = index(true_state, M.S)
-#                 episode_cost += M.C[true_s][a]
-#                 state = generate_successor(ℳ, state, A[a])
-#                 if length(state.action_list) == 0
-#                     true_state = state.state
-#                 else
-#                     true_state = generate_successor(M, true_s, a)
-#                 end
-#             end
-#         end
-#         push!(costs, episode_cost)
-#         println("Episode $i           Total cumulative cost: $(mean(costs)) ⨦ $(std(costs))")
-#     end
-#     # println("Reached the goal.")
-#     println("Total cumulative cost: $(mean(costs)) ⨦ $(std(costs))")
-# end
+function simulate(ℳ::SOMDP, ℒ::LAOStarSolver, 𝒱::ValueIterationSolver)
+    M, S, A, R = ℳ.M, ℳ.S, ℳ.A, ℳ.R
+    r = Vector{Float64}()
+    # println("Expected cost to goal: $(ℒ.V[index(state, S)])")
+    for i=1:1
+        state, true_state = ℳ.s₀, M.s₀
+        episode_reward = 0.0
+        while true
+            s = index(state, S)
+            a, _ = solve(ℒ, 𝒱, ℳ, s)
+            action = A[a]
+            println("Taking action $action in memory state $state
+                                           in true state $true_state.")
+            if action.value == "QUERY"
+                state = MemoryState(true_state, Vector{DomainAction}())
+                episode_reward -= 3
+            else
+                true_s = index(true_state, M.S)
+                episode_reward += M.R[true_s][a]
+                state = generate_successor(ℳ, state, A[a])
+                if length(state.action_list) == 0
+                    true_state = state.state
+                else
+                    true_state = generate_successor(M, true_s, a)
+                end
+            end
+
+            if terminal(state) || terminal(true_state)
+                println("Terminating in state $state and
+                                   true state $true_state.")
+                break
+            end
+        end
+        push!(r, episode_reward)
+        # println("Episode $i || Total cumulative reward:
+        #              $(mean(episode_reward)) ⨦ $(std(episode_reward))")
+    end
+    # println("Reached the goal.")
+    println("Total cumulative reward: $(mean(r)) ⨦ $(std(r))")
+end
 #
 # function simulate(ℳ::MemorySSP, 𝒱::ValueIterationSolver, π::MCTSSolver)
 #     M, S, A, C = ℳ.M, ℳ.S, ℳ.A, ℳ.C
@@ -317,28 +343,28 @@ function build_model(M::MDP)
     S, s₀ = generate_states(M, δ)
     A = generate_actions(M)
     τ = Dict{Int, Dict{Int, Dict{Int, Float64}}}()
-    ℳ = MemorySSP(M, S, A, generate_transitions, generate_reward, s₀,
+    ℳ = SOMDP(M, S, A, generate_transitions, generate_reward, s₀,
                    τ, δ, generate_heuristic)
-    return ℳ, 𝒱
+    return ℳ
 end
 
 function solve_model(ℳ, 𝒱)
-    # ℒ = LAOStarSolver(100000, 1000., 1.0, .001, Dict{Integer, Integer}(),
-    #      zeros(length(ℳ.S)), zeros(length(ℳ.S)),
-    #      zeros(length(ℳ.S)), zeros(length(ℳ.A)))
+    ℒ = LAOStarSolver(100000, 1000., 1.0, .001, Dict{Integer, Integer}(),
+         zeros(length(ℳ.S)), zeros(length(ℳ.S)),
+         zeros(length(ℳ.S)), zeros(length(ℳ.A)))
     # 𝒰 = UCTSolver(zeros(length(ℳ.S)), Set(), 1000, 100, 0)
-    U(state) = minimum(heuristic(ℳ, 𝒱.V, state, action) for action in ℳ.A)
-    U(state, action) = heuristic(ℳ, 𝒱.V, state, action)
+    # U(state) = minimum(heuristic(ℳ, 𝒱.V, state, action) for action in ℳ.A)
+    # U(state, action) = heuristic(ℳ, 𝒱.V, state, action)
 
-    π = MCTSSolver(ℳ, Dict(), Dict(), U, 10, 10000, 100.0)
+    # π = MCTSSolver(ℳ, Dict(), Dict(), U, 10, 10000, 100.0)
     S, s = ℳ.S, ℳ.s₀
-    # a, total_expanded = @time solve(ℒ, 𝒱, ℳ, index(s, S))
+    a, total_expanded = @time solve(ℒ, 𝒱, ℳ, index(s, S))
     # a = @time solve(𝒰, 𝒱, ℳ, )
-    a = @time solve(π, s)
-    return π, a
-    # println("LAO* expanded $total_expanded nodes.")
-    # println("Expected cost to goal: $(ℒ.V[index(s,S)])")
-    # return ℒ, ℒ.V[index(s, S)]
+    # a = @time solve(π, s)
+    # return π, a
+    println("LAO* expanded $total_expanded nodes.")
+    println("Expected cost to goal: $(ℒ.V[index(s,S)])")
+    return ℒ, ℒ.V[index(s, S)]
     # return 𝒰, 𝒰.V[index(s, S)]
 end
 
@@ -347,20 +373,33 @@ function main()
 
     println("Starting...")
     M = build_model(domain_map_file)
-    V = solve_model(M)
+    𝒱 = solve_model(M)
 
-    ℳ, 𝒱 = @time build_model(M)
+    ℳ = @time build_model(M)
+    print(ℳ.S[length(ℳ.S)])
+    # s′ = MemoryState(DomainState(5, 2, '←', 0, Integer[0,0,0]), DomainAction[])
+    # a = MemoryAction('↑')
+    # #
+    # for (s, state) in enumerate(ℳ.S)
+    #     t = ℳ.T(ℳ, state, a)[index(s′, ℳ.S)]
+    #     if t != 0.0
+    #         println("Transition probability $t of previous state $state")
+    #     end
+    # end
+
     # simulate(ℳ, 𝒱)
     println("Solving...")
     println(length(ℳ.S))
-    # ℒ, expected_cost = solve_model(ℳ, 𝒱)
-    # 𝒰, expected_cost = solve_model(ℳ, 𝒱)
-    π, a = solve_model(ℳ, 𝒱)
-    expected_cost = π.Q[(ℳ.s₀, a)]
-    println("Expected cost from initial state: $expected_cost")
+    ℒ, expected_cost = solve_model(ℳ, 𝒱)
+    # # 𝒰, expected_cost = solve_model(ℳ, 𝒱)
+    # # π, a = solve_model(ℳ, 𝒱)
+    # # expected_cost = π.Q[(ℳ.s₀, a)]
+    println("Expected reward from initial state: $expected_cost")
     println("Simulating...")
-    # simulate(ℳ, ℒ, 𝒱)
-    simulate(ℳ, 𝒱, π)
+    simulate(ℳ, ℒ, 𝒱)
+
+
+    # simulate(ℳ, 𝒱, π)
 end
 
 main()

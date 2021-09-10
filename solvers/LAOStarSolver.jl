@@ -104,9 +104,9 @@ function expand(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M,
         return 0
     end
     push!(visited, s)
-    # if M.S[s] ∈ M.G
-    #     return 0
-    # end
+    if terminal(M.S[s])
+        return 0
+    end
 
     count = 0
     if s ∉ keys(ℒ.π)
@@ -164,9 +164,9 @@ function test_convergence(ℒ::LAOStarSolver,
                           s::Integer,
                           visited::Set{Integer})
     error = 0.0
-    # if M.S[s] ∈ M.G
-    #     return 0.0
-    # end
+    if terminal(M.S[s])
+        return 0.0
+    end
 
     if s ∈ visited
         return 0.0
@@ -233,7 +233,6 @@ function solve(ℒ::LAOStarSolver,
                s::Integer)
     expanded = 0
     visited = Set{Integer}()
-
     iter = 0
     total_expanded = 0
 
@@ -244,7 +243,7 @@ function solve(ℒ::LAOStarSolver,
             empty!(visited)
             num_expanded = expand(ℒ, 𝒱, M, s, visited)
             total_expanded += num_expanded
-            # println(num_expanded, "               ", total_expanded)
+            println(num_expanded, "               ", total_expanded)
             if num_expanded == 0
                 break
             end

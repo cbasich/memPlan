@@ -18,12 +18,12 @@ struct DomainState
     x::Integer
     y::Integer
     θ::Char
-    ℒ::Integer
+    𝓁::Integer
     𝒫::Vector{Integer}
 end
 
 function ==(a::DomainState, b::DomainState)
-    return a.x == b.x && a.y == b.y && a.θ == b.θ && a.ℒ == b.ℒ && a.𝒫 == b.𝒫
+    return a.x == b.x && a.y == b.y && a.θ == b.θ && a.𝓁 == b.𝓁 && a.𝒫 == b.𝒫
 end
 
 struct DomainAction
@@ -58,6 +58,9 @@ function generate_grid(filename::String)
     return grid
 end
 
+## TODO: There is a bug for when people *start* out in '0' smoke level locations
+##       We can probably ignore it becuase if they have 0 smoke level we
+##       don't do anything with them anyways. Still be careful...
 function generate_states(grid::Vector{Vector{Any}})
     S = Vector{DomainState}()
     s₀ = PRESERVE_NONE
@@ -84,6 +87,10 @@ function generate_states(grid::Vector{Vector{Any}})
         end
     end
     return S, s₀
+end
+
+function terminal(state::DomainState)
+    return sum(state.𝒫) == 0
 end
 
 function generate_actions()
@@ -175,7 +182,7 @@ function aid_distribution(state::DomainState,
 
     𝒫′ = copy(state.𝒫)
     𝒫′[index(loc, people_locations)] = 0
-    s′ = DomainState(state.x, state.y, state.θ, state.ℒ, 𝒫′)
+    s′ = DomainState(state.x, state.y, state.θ, state.𝓁, 𝒫′)
     distr[index(s′, S)] = 1.0
     return distr
 end
@@ -223,11 +230,13 @@ function check_transition_validity(T, S, A)
                 println("State: $(S[i])")
                 println("Action: $(A[j])")
                 for k in 1:n
-                    println("Succ State: $(S[k])     with probability: $(T[i][j][k])")
+                    if T[i][j][k] ≠ 0.0
+                        println("Succ State $k: $(S[k])     with probability: $(T[i][j][k])")
+                    end
                 end
                 return 0.
             end
-            if sum(T[i][j]) == 1.
+            if sum(T[i][j]) + 0.00001 ≥ 1.
                 continue
             else
                 println("Transition error at state index $i and action index $j")
@@ -243,8 +252,6 @@ end
 
 function build_model(filepath::String)
     grid = generate_grid(filepath)
-    # println(grid)
-    # println(grid[2][4])
     S, s₀ = generate_states(grid)
     A = generate_actions()
     T = generate_transitions(S, A)
@@ -289,26 +296,26 @@ function simulate(ℳ::MDP, 𝒱::ValueIterationSolver)
             r += R[s][a]
             println("Taking action $(A[a]) in state $state.")
             state = generate_successor(ℳ, s, a)
-            if sum(state.𝒫) == 0
+            if terminal(state)
                 break
             end
         end
         # println("Reached the goal with total cost $cost.")
     end
-    println("Average reward: $(r / 100.0)")
+    println("Average reward: $(r / 1.0)")
 end
 
 # Not sure if there is a better way than manually setting this?
-people_locations = [(2,2), (4,7), (4,8)]
+people_locations = [(15,9), (4,7), (11,18)]
 
-function main()
-    domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_1.txt")
+function run_MDP()
+    domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_765255303468316411.txt")
     ℳ = build_model(domain_map_file)
-    𝒱 = solve_model(ℳ)
-    simulate(ℳ, 𝒱)
+    𝒱 = @time solve_model(ℳ)
+    # simulate(ℳ, 𝒱)
 end
 
-main()
+run_MDP()
 
 
 function generate_map(h::Int, w::Int)
@@ -324,16 +331,16 @@ function generate_map(h::Int, w::Int)
                 write(io, 'X')
             else
                 p = rand(MT)
-                if p < 0.4
-                    write(io, '0')
-                elseif p < 0.6
-                    write(io, '1')
-                elseif p < 0.75
-                    write(io, '2')
-                elseif p < 0.85
-                    write(io, '3')
-                else
+                if p < 0.5
                     write(io, 'X')
+                elseif p < 0.6
+                    write(io, '0')
+                elseif p < 0.8
+                    write(io, '1')
+                elseif p < 0.9
+                    write(io, '2')
+                else
+                    write(io, '3')
                 end
             end
             write(io, ' ')
@@ -343,4 +350,4 @@ function generate_map(h::Int, w::Int)
     close(io)
 end
 
-generate_map(20, 20)
+# generate_map(20, 20)
