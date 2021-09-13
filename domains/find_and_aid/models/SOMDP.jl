@@ -339,7 +339,7 @@ end
 # end
 
 function build_model(M::MDP)
-    δ = 1
+    δ = 2
     S, s₀ = generate_states(M, δ)
     A = generate_actions(M)
     τ = Dict{Int, Dict{Int, Dict{Int, Float64}}}()

@@ -306,10 +306,11 @@ function simulate(ℳ::MDP, 𝒱::ValueIterationSolver)
 end
 
 # Not sure if there is a better way than manually setting this?
-people_locations = [(15,9), (4,7), (11,18)]
+# people_locations = [(15,9), (4,7), (11,18)]
+people_locations = [(2,2), (4,7), (3,8)]
 
 function run_MDP()
-    domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_765255303468316411.txt")
+    domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_1.txt")
     ℳ = build_model(domain_map_file)
     𝒱 = @time solve_model(ℳ)
     # simulate(ℳ, 𝒱)
