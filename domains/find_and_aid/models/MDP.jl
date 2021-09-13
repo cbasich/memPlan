@@ -86,6 +86,12 @@ function generate_states(grid::Vector{Vector{Any}})
             end
         end
     end
+
+    for mask in collect(combinations(1:num_people))
+        P = copy(𝒫)
+        P[mask] .= 0
+        push!(S, DomainState(0, 0, '↑', 0, P)
+    end
     return S, s₀
 end
 
@@ -143,23 +149,31 @@ function move_distribution(state::DomainState,
                            action::DomainAction,
                            S::Vector{DomainState})
     xp, yp = pos_shift(action.value)
-    xpr, ypr = pos_shift(slip_right(action.value))
-    xpl, ypl = pos_shift(slip_left(action.value))
-    xp, xpr, xpl = xp + state.x, xpr + state.x, xpl + state.x
-    yp, ypr, ypl = yp + state.y, ypr + state.y, ypl + state.y
-
     distr = zeros(length(S))
+
+    ## TODO: Pass grid through this function.
+    if grid[xp][yp] = 'X'
+        outside = DomainState(xp, yp, '↑', 0, state.𝒫)
+        distr[index(outside, S)] = 0.8
+        distr[index(state, S)] = 0.2
+        return distr
+    end
+    # xpr, ypr = pos_shift(slip_right(action.value))
+    # xpl, ypl = pos_shift(slip_left(action.value))
+    # xp, xpr, xpl = xp + state.x, xpr + state.x, xpl + state.x
+    # yp, ypr, ypl = yp + state.y, ypr + state.y, ypl + state.y
+
     for (s′, state′) in enumerate(S)
         if state′.θ ≠ action.value || state′.𝒫 ≠ state.𝒫
             continue
         end
 
         if state == state′
-            distr[s′] = 0.1
-        elseif state′.x == xpr && state′.y == ypr
-            distr[s′] = 0.05
-        elseif state′.x == xpl && state′.y == ypl
-            distr[s′] = 0.05
+            distr[s′] = 0.2
+        # elseif state′.x == xpr && state′.y == ypr
+        #     distr[s′] = 0.05
+        # elseif state′.x == xpl && state′.y == ypl
+        #     distr[s′] = 0.05
         elseif state′.x == xp && state′.y == yp
             distr[s′] = 0.8
         end
@@ -188,12 +202,20 @@ function aid_distribution(state::DomainState,
 end
 
 function generate_transitions(S::Vector{DomainState},
-                              A::Vector{DomainAction})
+                              A::Vector{DomainAction},
+                              s₀::DomainState)
     T = [[[0.0 for (i, _) in enumerate(S)]
                for (j, _) in enumerate(A)]
                for (k, _) in enumerate(S)]
 
     for (s, state) in enumerate(S)
+        ## First check if "outside"
+        if state.x == 0
+            s′ = DomainState(s₀.x, s₀.y, s₀.θ, s₀.𝓁, state.𝒫)
+            T[s,:,s′] = 1.0
+            continue
+        end
+
         for (a, action) in enumerate(A)
             if action.value == "aid"
                 T[s][a] = aid_distribution(state, S)
@@ -215,7 +237,12 @@ function generate_rewards(S::Vector{DomainState},
                for (j, _) in enumerate(S)]
 
     for (s, state) in enumerate(S)
-        R[s] *= sum(state.𝒫)
+        # First check to see if outside
+        if state.x == 0
+            R[s] = -2.0 * ceil(sqrt(length(S)))
+        else
+            R[s] *= sum(state.𝒫)
+        end
     end
     return R
 end
