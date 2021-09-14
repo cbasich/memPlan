@@ -87,11 +87,11 @@ function generate_states(grid::Vector{Vector{Any}})
         end
     end
 
-    for mask in collect(combinations(1:num_people))
-        P = copy(𝒫)
-        P[mask] .= 0
-        push!(S, DomainState(0, 0, '↑', 0, P)
-    end
+    # for mask in collect(combinations(1:num_people))
+    #     P = copy(𝒫)
+    #     P[mask] .= 0
+    #     push!(S, DomainState(0, 0, '↑', 0, P))
+    # end
     return S, s₀
 end
 
@@ -149,15 +149,16 @@ function move_distribution(state::DomainState,
                            action::DomainAction,
                            S::Vector{DomainState})
     xp, yp = pos_shift(action.value)
+    xp, yp = state.x + xp, state.y + yp
     distr = zeros(length(S))
 
     ## TODO: Pass grid through this function.
-    if grid[xp][yp] = 'X'
-        outside = DomainState(xp, yp, '↑', 0, state.𝒫)
-        distr[index(outside, S)] = 0.8
-        distr[index(state, S)] = 0.2
-        return distr
-    end
+    # if grid[xp][yp] = 'X'
+    #     outside = DomainState(xp, yp, '↑', 0, state.𝒫)
+    #     distr[index(outside, S)] = 0.8
+    #     distr[index(state, S)] = 0.2
+    #     return distr
+    # end
     # xpr, ypr = pos_shift(slip_right(action.value))
     # xpl, ypl = pos_shift(slip_left(action.value))
     # xp, xpr, xpl = xp + state.x, xpr + state.x, xpl + state.x
@@ -210,11 +211,11 @@ function generate_transitions(S::Vector{DomainState},
 
     for (s, state) in enumerate(S)
         ## First check if "outside"
-        if state.x == 0
-            s′ = DomainState(s₀.x, s₀.y, s₀.θ, s₀.𝓁, state.𝒫)
-            T[s,:,s′] = 1.0
-            continue
-        end
+        # if state.x == 0
+        #     s′ = DomainState(s₀.x, s₀.y, s₀.θ, s₀.𝓁, state.𝒫)
+        #     T[s,:,s′] = 1.0
+        #     continue
+        # end
 
         for (a, action) in enumerate(A)
             if action.value == "aid"
@@ -238,11 +239,12 @@ function generate_rewards(S::Vector{DomainState},
 
     for (s, state) in enumerate(S)
         # First check to see if outside
-        if state.x == 0
-            R[s] = -2.0 * ceil(sqrt(length(S)))
-        else
-            R[s] *= sum(state.𝒫)
-        end
+        # if state.x == 0
+        #     R[s] = -2.0 * ceil(sqrt(length(S)))
+        # else
+        #     R[s] *= sum(state.𝒫)
+        # end
+        R[s] *= sum(state.𝒫)
     end
     return R
 end

@@ -243,7 +243,7 @@ function solve(ℒ::LAOStarSolver,
             empty!(visited)
             num_expanded = expand(ℒ, 𝒱, M, s, visited)
             total_expanded += num_expanded
-            println(num_expanded, "               ", total_expanded)
+            # println(num_expanded, "               ", total_expanded)
             if num_expanded == 0
                 break
             end

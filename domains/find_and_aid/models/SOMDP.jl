@@ -7,6 +7,9 @@ import Base.==
 include("MDP.jl")
 include(joinpath(@__DIR__, "..", "..", "..", "solvers", "VIMDPSolver.jl"))
 include(joinpath(@__DIR__, "..", "..", "..", "solvers", "LAOStarSolver.jl"))
+include(joinpath(@__DIR__, "..", "..", "..", "solvers", "UCTSolverMDP.jl"))
+include(joinpath(@__DIR__, "..", "..", "..", "solvers", "MCTSSolver.jl"))
+
 
 function index(element, collection)
     for i=1:length(collection)
@@ -338,8 +341,8 @@ end
 #     println("Total cumulative cost: $(mean(costs)) ⨦ $(std(costs))")
 # end
 
-function build_model(M::MDP)
-    δ = 2
+function build_model(M::MDP,
+                     δ::Int)
     S, s₀ = generate_states(M, δ)
     A = generate_actions(M)
     τ = Dict{Int, Dict{Int, Dict{Int, Float64}}}()
@@ -348,58 +351,68 @@ function build_model(M::MDP)
     return ℳ
 end
 
-function solve_model(ℳ, 𝒱)
-    ℒ = LAOStarSolver(100000, 1000., 1.0, .001, Dict{Integer, Integer}(),
-         zeros(length(ℳ.S)), zeros(length(ℳ.S)),
-         zeros(length(ℳ.S)), zeros(length(ℳ.A)))
-    # 𝒰 = UCTSolver(zeros(length(ℳ.S)), Set(), 1000, 100, 0)
-    # U(state) = minimum(heuristic(ℳ, 𝒱.V, state, action) for action in ℳ.A)
-    # U(state, action) = heuristic(ℳ, 𝒱.V, state, action)
-
-    # π = MCTSSolver(ℳ, Dict(), Dict(), U, 10, 10000, 100.0)
+function solve_model(ℳ, 𝒱, solver)
     S, s = ℳ.S, ℳ.s₀
-    a, total_expanded = @time solve(ℒ, 𝒱, ℳ, index(s, S))
-    # a = @time solve(𝒰, 𝒱, ℳ, )
-    # a = @time solve(π, s)
-    # return π, a
-    println("LAO* expanded $total_expanded nodes.")
-    println("Expected cost to goal: $(ℒ.V[index(s,S)])")
-    return ℒ, ℒ.V[index(s, S)]
-    # return 𝒰, 𝒰.V[index(s, S)]
+    println("Solving...")
+
+    if solver == "laostar"
+        ℒ = LAOStarSolver(100000, 1000., 1.0, .001, Dict{Integer, Integer}(),
+            zeros(length(ℳ.S)), zeros(length(ℳ.S)),
+            zeros(length(ℳ.S)), zeros(length(ℳ.A)))
+        a, total_expanded = @time solve(ℒ, 𝒱, ℳ, index(s, S))
+        println("LAO* expanded $total_expanded nodes.")
+        println("Expected reward: $(ℒ.V[index(s,S)])")
+        return ℒ
+    elseif solver == "uct"
+        𝒰 = UCTSolver(zeros(length(ℳ.S)), Set(), 1000, 100, 0)
+        a = @time solve(𝒰, 𝒱, ℳ)
+        println("Expected reward: $(𝒰.V[index(s, S)])")
+        return 𝒰
+    elseif solver == "mcts"
+        U(state) = maximum(generate_heuristic(ℳ, 𝒱.V, state, action)
+                                                  for action in ℳ.A)
+        U(state, action) = generate_heuristic(ℳ, 𝒱.V, state, action)
+        π = MCTSSolver(ℳ, Dict(), Dict(), U, 10, 10000, 100.0)
+        a = @time solve(π, s)
+        println("Expected reard: $(π.Q[(s, a)])")
+        return π, a
+    end
 end
 
-function main()
+function main(solver::String,
+            simulate::Bool,
+                   δ::Int)
     domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_1.txt")
 
     println("Starting...")
     M = build_model(domain_map_file)
     𝒱 = solve_model(M)
 
-    ℳ = @time build_model(M)
-    print(ℳ.S[length(ℳ.S)])
-    # s′ = MemoryState(DomainState(5, 2, '←', 0, Integer[0,0,0]), DomainAction[])
-    # a = MemoryAction('↑')
-    # #
-    # for (s, state) in enumerate(ℳ.S)
-    #     t = ℳ.T(ℳ, state, a)[index(s′, ℳ.S)]
-    #     if t != 0.0
-    #         println("Transition probability $t of previous state $state")
-    #     end
-    # end
+    ℳ = @time build_model(M, δ)
+    println("Total states: $(length(ℳ.S))")
 
-    # simulate(ℳ, 𝒱)
-    println("Solving...")
-    println(length(ℳ.S))
-    ℒ, expected_cost = solve_model(ℳ, 𝒱)
-    # # 𝒰, expected_cost = solve_model(ℳ, 𝒱)
-    # # π, a = solve_model(ℳ, 𝒱)
-    # # expected_cost = π.Q[(ℳ.s₀, a)]
-    println("Expected reward from initial state: $expected_cost")
-    println("Simulating...")
-    simulate(ℳ, ℒ, 𝒱)
-
-
-    # simulate(ℳ, 𝒱, π)
+    if solver == "laostar"
+        ℒ = solve_model(ℳ, 𝒱, solver)
+        if simulate
+            println("Simulating...")
+            simulate(ℳ, ℒ, 𝒱)
+        end
+    elseif solver == "uct"
+        𝒰 = solve_model(ℳ, 𝒱, solver)
+        if simulate
+            println("Simulating...")
+            simulate(ℳ, 𝒱, 𝒰)
+        end
+    elseif solver == "mcts"
+        π, a = solve_model(ℳ, 𝒱, solver)
+        # expected_cost = π.Q[(ℳ.s₀, a)]
+        if simulate
+            println("Simulating...")
+            simulate(ℳ, 𝒱, π)
+        end
+    else
+        println("Error.")
+    end
 end
 
-main()
+main("mcts", false, 1)

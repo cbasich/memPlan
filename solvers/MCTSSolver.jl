@@ -31,13 +31,17 @@ Base.argmin(f::Function, X) = findmin(f, X)[2]
 
 #############################
 
+## Note: In this file, "s" and "a" refer to states and actions not indices.
+#        specificially for the benefit of readibility.
+##
+
 mutable struct MCTSSolver
-    ℳ# Problem Model
-    N # Node visit counter
-    Q # Action value estimates
-    U # Value function estimate
-    d # Rollout maximal depth
-    m # Max number of rollouts
+    ℳ # Problem Model
+    N  # Node visit counter
+    Q  # Action value estimates
+    U  # Value function estimate
+    d  # Rollout maximal depth
+    m  # Max number of rollouts
     c # Exploration constant
 end
 
@@ -45,8 +49,8 @@ function solve(π::MCTSSolver, s)
     for k = 1:π.m
         rollout!(π, s)
     end
-    println(minimum(a->π.Q[(s,a)], π.ℳ.A))
-    return argmin(a->π.Q[(s,a)], π.ℳ.A)
+    println(maximum(a->π.Q[(s,a)], π.ℳ.A))
+    return argmax(a->π.Q[(s,a)], π.ℳ.A)
 end
 
 function rollout!(π::MCTSSolver, s, d=π.d)
@@ -68,7 +72,7 @@ function rollout!(π::MCTSSolver, s, d=π.d)
     a = select_action(π, s)
     # println(s, a)
     s′ = generate_successor(ℳ, s, a)
-    r = ℳ.C(ℳ, s, a)                # This is actually a positive cost.
+    r = ℳ.R(ℳ, s, a)                # This is actually a positive cost.
     q = r + rollout!(π, s′, d-1)
 
     N[(s,a)] += 1
@@ -78,10 +82,10 @@ function rollout!(π::MCTSSolver, s, d=π.d)
     return q
 end
 
-bonus(Nsa, Ns) = Nsa == 0 ? Inf : sqrt(log(Ns)/Nsa)
+bonus(Nsa, Ns) = Nsa == 0 ? -Inf : sqrt(log(Ns)/Nsa)
 
 function select_action(π::MCTSSolver, s)
     A, N, Q, c = π.ℳ.A, π.N, π.Q, π.c
     Ns = sum(N[(s,a)] for a in A)
-    return argmin(a->Q[(s,a)] + c * bonus(N[(s,a)], Ns), A)
+    return argmax(a->Q[(s,a)] + c * bonus(N[(s,a)], Ns), A)
 end
