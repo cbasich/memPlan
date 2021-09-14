@@ -9,6 +9,7 @@ include(joinpath(@__DIR__, "..", "..", "..", "solvers", "VIMDPSolver.jl"))
 include(joinpath(@__DIR__, "..", "..", "..", "solvers", "LAOStarSolver.jl"))
 include(joinpath(@__DIR__, "..", "..", "..", "solvers", "UCTSolverMDP.jl"))
 include(joinpath(@__DIR__, "..", "..", "..", "solvers", "MCTSSolver.jl"))
+include(joinpath(@__DIR__, "..", "..", "..", "solvers", "FLARESSolver.jl"))
 
 
 function index(element, collection)
@@ -265,7 +266,7 @@ function simulate(ℳ::SOMDP,
     println("Average cost to goal: $cum_cost")
 end
 
-function simulate(ℳ::SOMDP, ℒ::LAOStarSolver, 𝒱::ValueIterationSolver)
+function simulate(ℳ::SOMDP, 𝒮::Union{LAOStarSolver,FLARESSolver}, 𝒱::ValueIterationSolver)
     M, S, A, R = ℳ.M, ℳ.S, ℳ.A, ℳ.R
     r = Vector{Float64}()
     # println("Expected cost to goal: $(ℒ.V[index(state, S)])")
@@ -274,7 +275,7 @@ function simulate(ℳ::SOMDP, ℒ::LAOStarSolver, 𝒱::ValueIterationSolver)
         episode_reward = 0.0
         while true
             s = index(state, S)
-            a, _ = solve(ℒ, 𝒱, ℳ, s)
+            a = 𝒮.π[s]
             action = A[a]
             println("Taking action $action in memory state $state
                                            in true state $true_state.")
@@ -376,6 +377,16 @@ function solve_model(ℳ, 𝒱, solver)
         a = @time solve(π, s)
         println("Expected reard: $(π.Q[(s, a)])")
         return π, a
+    elseif solver == "flares"
+        ℱ = FLARESSolver(100000, 4, false, false, 1000, -1, 0.001,
+                         Dict{Integer, Integer}(),
+                         zeros(length(ℳ.S)),
+                         zeros(length(ℳ.S)),
+                         Set{Integer},
+                         Set{Integer},
+                         zeros(length(ℳ.A)))
+        a, num = @time solve(ℱ, 𝒱, ℳ, index(s, S))
+        return ℱ
     end
 end
 
@@ -410,9 +421,15 @@ function main(solver::String,
             println("Simulating...")
             simulate(ℳ, 𝒱, π)
         end
+    elseif solver == "flares"
+        ℱ = solve_model(ℳ, 𝒱, solver)
+        if simulate
+            println("Simulating")
+            simulate(ℳ, ℱ, 𝒱)
+        end
     else
         println("Error.")
     end
 end
 
-main("mcts", false, 1)
+main("flares", true, 1)

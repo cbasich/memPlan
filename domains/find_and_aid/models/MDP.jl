@@ -63,7 +63,7 @@ end
 ##       don't do anything with them anyways. Still be careful...
 function generate_states(grid::Vector{Vector{Any}})
     S = Vector{DomainState}()
-    s₀ = PRESERVE_NONE
+    s₀ = -1
     𝒫 = generate_people_smoke_level_vector(grid)
     num_people = length(people_locations)
 
@@ -283,7 +283,7 @@ function build_model(filepath::String)
     grid = generate_grid(filepath)
     S, s₀ = generate_states(grid)
     A = generate_actions()
-    T = generate_transitions(S, A)
+    T = generate_transitions(S, A, s₀)
     check_transition_validity(T, S, A)
     R = generate_rewards(S, A)
     ℳ = MDP(S, A, T, R, s₀)
