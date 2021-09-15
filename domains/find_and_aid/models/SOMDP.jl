@@ -307,40 +307,48 @@ function simulate(ℳ::SOMDP, 𝒮::Union{LAOStarSolver,FLARESSolver}, 𝒱::Val
     println("Total cumulative reward: $(mean(r)) ⨦ $(std(r))")
 end
 #
-# function simulate(ℳ::MemorySSP, 𝒱::ValueIterationSolver, π::MCTSSolver)
-#     M, S, A, C = ℳ.M, ℳ.S, ℳ.A, ℳ.C
-#     costs = Vector{Float64}()
-#     # println("Expected cost to goal: $(ℒ.V[index(state, S)])")
-#     for i=1:1
-#         state, true_state, G = ℳ.s₀, M.s₀, M.G
-#         episode_cost = 0.0
-#         while true_state ∉ G
-#             # s = index(state, S)
-#             # a, _ = solve(ℒ, 𝒱, ℳ, s)
-#             action = solve(π, state)
-#             # action = A[a]
-#             println("Taking action $action in memory state $state in true state $true_state.")
-#             if action.value == "query"
-#                 state = MemoryState(true_state, Vector{CampusAction}())
-#                 episode_cost += 3
-#             else
-#                 true_s = index(true_state, M.S)
-#                 a = index(action, A)
-#                 episode_cost += M.C[true_s][a]
-#                 state = generate_successor(ℳ, state, action)
-#                 if length(state.action_list) == 0
-#                     true_state = state.state
-#                 else
-#                     true_state = generate_successor(M, true_s, a)
-#                 end
-#             end
-#         end
-#         push!(costs, episode_cost)
-#         println("Episode $i           Total cumulative cost: $(mean(costs)) ⨦ $(std(costs))")
-#     end
-#     # println("Reached the goal.")
-#     println("Total cumulative cost: $(mean(costs)) ⨦ $(std(costs))")
-# end
+function simulate(ℳ::SOMDP,
+                   𝒱::ValueIterationSolver,
+                   π::MCTSSolver)
+    M, S, A, R = ℳ.M, ℳ.S, ℳ.A, ℳ.R
+    rewards = Vector{Float64}()
+    # println("Expected cost to goal: $(ℒ.V[index(state, S)])")
+    for i=1:1
+        state, true_state = ℳ.s₀, M.s₀
+        r = 0.0
+        while true
+            # s = index(state, S)
+            # a, _ = solve(ℒ, 𝒱, ℳ, s)
+            action = @time solve(π, state)
+            # action = A[a]
+            println("Taking action $action in memory state $state
+                                           in true state $true_state.")
+            if action.value == "QUERY"
+                state = MemoryState(true_state, Vector{DomainAction}())
+                r -= 3
+            else
+                true_s = index(true_state, M.S)
+                a = index(action, A)
+                r += M.R[true_s][a]
+                state = generate_successor(ℳ, state, action)
+                if length(state.action_list) == 0
+                    true_state = state.state
+                else
+                    true_state = generate_successor(M, true_s, a)
+                end
+            end
+            if terminal(state) || terminal(true_state)
+                println("Terminating in state $state and
+                                   true state $true_state.")
+                break
+            end
+        end
+        push!(rewards, r)
+        # println("Episode $i  Total cumulative cost: $(mean(costs)) ⨦ $(std(costs))")
+    end
+    # println("Reached the goal.")
+    println("Average reward: $(mean(costs)) ⨦ $(std(costs))")
+end
 
 function build_model(M::MDP,
                      δ::Int)
@@ -373,7 +381,7 @@ function solve_model(ℳ, 𝒱, solver)
         U(state) = maximum(generate_heuristic(ℳ, 𝒱.V, state, action)
                                                   for action in ℳ.A)
         U(state, action) = generate_heuristic(ℳ, 𝒱.V, state, action)
-        π = MCTSSolver(ℳ, Dict(), Dict(), U, 10, 10000, 100.0)
+        π = MCTSSolver(ℳ, Dict(), Dict(), U, 20, 100, 100.0)
         a = @time solve(π, s)
         println("Expected reard: $(π.Q[(s, a)])")
         return π, a
@@ -392,7 +400,7 @@ function solve_model(ℳ, 𝒱, solver)
 end
 
 function main(solver::String,
-            sim::Bool,
+                 sim::Bool,
                    δ::Int)
     domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_1.txt")
 
@@ -432,3 +440,5 @@ function main(solver::String,
         println("Error.")
     end
 end
+
+main("laostar", true, 1)

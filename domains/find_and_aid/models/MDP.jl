@@ -87,11 +87,12 @@ function generate_states(grid::Vector{Vector{Any}})
         end
     end
 
-    # for mask in collect(combinations(1:num_people))
-    #     P = copy(𝒫)
-    #     P[mask] .= 0
-    #     push!(S, DomainState(0, 0, '↑', 0, P))
-    # end
+    for mask in collect(combinations(1:num_people))
+        P = copy(𝒫)
+        P[mask] .= 0
+        push!(S, DomainState(0, 0, '↑', 0, P))
+    end
+    push!(S, DomainState(0, 0, '↑', 0, 𝒫))
     return S, s₀
 end
 
@@ -146,19 +147,24 @@ function slip_left(dir::Char)
 end
 
 function move_distribution(state::DomainState,
-                           action::DomainAction,
-                           S::Vector{DomainState})
+                          action::DomainAction,
+                            grid,
+                               S::Vector{DomainState})
     xp, yp = pos_shift(action.value)
     xp, yp = state.x + xp, state.y + yp
     distr = zeros(length(S))
 
-    ## TODO: Pass grid through this function.
-    # if grid[xp][yp] = 'X'
-    #     outside = DomainState(xp, yp, '↑', 0, state.𝒫)
-    #     distr[index(outside, S)] = 0.8
-    #     distr[index(state, S)] = 0.2
-    #     return distr
-    # end
+    if xp > length(grid) || yp > length(grid[1])
+        distr[index(state, S)] = 1.0
+        return distr
+    end
+
+    if grid[xp][yp] == 'X'
+        outside = DomainState(0, 0, '↑', 0, state.𝒫)
+        distr[index(outside, S)] = 0.8
+        distr[index(state, S)] = 0.2
+        return distr
+    end
     # xpr, ypr = pos_shift(slip_right(action.value))
     # xpl, ypl = pos_shift(slip_left(action.value))
     # xp, xpr, xpl = xp + state.x, xpr + state.x, xpl + state.x
@@ -204,24 +210,28 @@ end
 
 function generate_transitions(S::Vector{DomainState},
                               A::Vector{DomainAction},
-                              s₀::DomainState)
+                           grid,
+                             s₀::DomainState)
     T = [[[0.0 for (i, _) in enumerate(S)]
                for (j, _) in enumerate(A)]
                for (k, _) in enumerate(S)]
 
     for (s, state) in enumerate(S)
-        ## First check if "outside"
-        # if state.x == 0
-        #     s′ = DomainState(s₀.x, s₀.y, s₀.θ, s₀.𝓁, state.𝒫)
-        #     T[s,:,s′] = 1.0
-        #     continue
-        # end
+        # First check if "outside"
+        if state.x == 0
+            state′ = DomainState(s₀.x, s₀.y, s₀.θ, s₀.𝓁, state.𝒫)
+            s′ = index(state′, S)
+            for a=1:length(A)
+                T[s][a][s′] = 1.0
+            end
+            continue
+        end
 
         for (a, action) in enumerate(A)
             if action.value == "aid"
                 T[s][a] = aid_distribution(state, S)
             else
-                T[s][a] = move_distribution(state, action, S)
+                T[s][a] = move_distribution(state, action, grid, S)
             end
             # if sum(T[s][a]) ≠ 1.0
             #     print(sum)
@@ -238,13 +248,10 @@ function generate_rewards(S::Vector{DomainState},
                for (j, _) in enumerate(S)]
 
     for (s, state) in enumerate(S)
-        # First check to see if outside
-        # if state.x == 0
-        #     R[s] = -2.0 * ceil(sqrt(length(S)))
-        # else
-        #     R[s] *= sum(state.𝒫)
-        # end
         R[s] *= sum(state.𝒫)
+        if state.x == 0
+            R[s] -= 2.0 * ceil(sqrt(length(S)))
+        end
     end
     return R
 end
@@ -283,7 +290,7 @@ function build_model(filepath::String)
     grid = generate_grid(filepath)
     S, s₀ = generate_states(grid)
     A = generate_actions()
-    T = generate_transitions(S, A, s₀)
+    T = generate_transitions(S, A, grid, s₀)
     check_transition_validity(T, S, A)
     R = generate_rewards(S, A)
     ℳ = MDP(S, A, T, R, s₀)
@@ -342,7 +349,7 @@ function run_MDP()
     domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_1.txt")
     ℳ = build_model(domain_map_file)
     𝒱 = @time solve_model(ℳ)
-    # simulate(ℳ, 𝒱)
+    simulate(ℳ, 𝒱)
 end
 
 run_MDP()
