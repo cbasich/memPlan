@@ -378,12 +378,12 @@ function solve_model(ℳ, 𝒱, solver)
         println("Expected reard: $(π.Q[(s, a)])")
         return π, a
     elseif solver == "flares"
-        ℱ = FLARESSolver(100000, 4, false, false, 1000, -1, 0.001,
+        ℱ = FLARESSolver(100000, 4, false, false, 1000, 0.001,
                          Dict{Integer, Integer}(),
                          zeros(length(ℳ.S)),
                          zeros(length(ℳ.S)),
-                         Set{Integer},
-                         Set{Integer},
+                         Set{Integer}(),
+                         Set{Integer}(),
                          zeros(length(ℳ.A)))
         a, num = @time solve(ℱ, 𝒱, ℳ, index(s, S))
         return ℱ
@@ -391,7 +391,7 @@ function solve_model(ℳ, 𝒱, solver)
 end
 
 function main(solver::String,
-            simulate::Bool,
+            sim::Bool,
                    δ::Int)
     domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_1.txt")
 
@@ -404,26 +404,26 @@ function main(solver::String,
 
     if solver == "laostar"
         ℒ = solve_model(ℳ, 𝒱, solver)
-        if simulate
+        if sim
             println("Simulating...")
             simulate(ℳ, ℒ, 𝒱)
         end
     elseif solver == "uct"
         𝒰 = solve_model(ℳ, 𝒱, solver)
-        if simulate
+        if sim
             println("Simulating...")
             simulate(ℳ, 𝒱, 𝒰)
         end
     elseif solver == "mcts"
         π, a = solve_model(ℳ, 𝒱, solver)
         # expected_cost = π.Q[(ℳ.s₀, a)]
-        if simulate
+        if sim
             println("Simulating...")
             simulate(ℳ, 𝒱, π)
         end
     elseif solver == "flares"
         ℱ = solve_model(ℳ, 𝒱, solver)
-        if simulate
+        if sim
             println("Simulating")
             simulate(ℳ, ℱ, 𝒱)
         end

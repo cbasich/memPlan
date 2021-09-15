@@ -22,7 +22,7 @@ function trial(ℱ, 𝒱, M, s::Integer)
     accumulated_cost = 0.0
 
     while !(labeled_solved(ℱ, current_state))
-        if terminal(current_state)
+        if terminal(M.S[current_state])
             break
         end
         push!(visited, current_state)
@@ -33,8 +33,8 @@ function trial(ℱ, 𝒱, M, s::Integer)
         end
 
         greedy_action = ℱ.π[current_state]
-        accumulated_cost += M.R(M.S[current_state], M.A[greedy_action])
-        current_state = index(generate_successor(M, M.S[currentState], M.A[greedy_action]), M.S)
+        accumulated_cost += M.R(M, M.S[current_state], M.A[greedy_action])
+        current_state = index(generate_successor(M, M.S[current_state], M.A[greedy_action]), M.S)
     end
     while(!isempty(visited))
         current_state = pop!(visited)
@@ -138,7 +138,7 @@ function lookahead(ℱ::FLARESSolver,
                    M,
                    s::Integer,
                    a::Integer)
-    S, A, T, R, H, V = M.S, M.A, M.T, M.R, M.H, ℒ.V
+    S, A, T, R, H, V = M.S, M.A, M.T, M.R, M.H, ℱ.V
     T = T(M,S[s],A[a])
 
     q = 0.
@@ -183,12 +183,10 @@ function solve(ℱ::FLARESSolver,
                M,
                s::Integer)
 
-    ℱ.horizon = 0
-    while true
-        trials = 0
-        while (!labeled_solved(s) && trials < ℱ.max_trials)
-            trial(s)
-        end
+    trials = 0
+    while (!labeled_solved(ℱ,s) && trials < ℱ.max_trials)
+        trial(ℱ, 𝒱, M, s)
+        trials += 1
     end
     return ℱ.π[s], size(ℱ.dsolved)
 end
