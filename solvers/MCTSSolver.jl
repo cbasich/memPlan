@@ -46,10 +46,19 @@ mutable struct MCTSSolver
 end
 
 function solve(π::MCTSSolver, s)
+    num_visits = 0
+    for a in π.ℳ.A
+        if haskey(π.N, (s, a))
+            num_visits += π.N[(s,a)]
+        end
+    end
+    if num_visits >= π.m
+        return argmax(a->π.Q[(s,a)], π.ℳ.A)
+    end
+
     for k = 1:π.m
         rollout!(π, s)
     end
-    println(maximum(a->π.Q[(s,a)], π.ℳ.A))
     return argmax(a->π.Q[(s,a)], π.ℳ.A)
 end
 
@@ -59,30 +68,26 @@ function rollout!(π::MCTSSolver, s, d=π.d)
     end
 
     ℳ, N, Q, c = π.ℳ, π.N, π.Q, π.c
-    A = ℳ.A
+    A, R = ℳ.A, ℳ.R
     if !haskey(N, (s, first(A)))
         for a in A
             N[(s,a)] = 0
             Q[(s,a)] = π.U(s, a)
         end
-        # println(π.U(s))
         return π.U(s)
     end
 
     a = select_action(π, s)
-    # println(s, a)
     s′ = generate_successor(ℳ, s, a)
-    r = ℳ.R(ℳ, s, a)                # This is actually a positive cost.
+    r = R(ℳ, s, a)
     q = r + rollout!(π, s′, d-1)
 
     N[(s,a)] += 1
     Q[(s,a)] += (q - Q[(s,a)])/N[(s,a)]
-    # println(Q[(s,a)])
-    # print(q)
     return q
 end
 
-bonus(Nsa, Ns) = Nsa == 0 ? -Inf : sqrt(log(Ns)/Nsa)
+bonus(Nsa, Ns) = Nsa == 0 ? Inf : sqrt(log(Ns)/Nsa)
 
 function select_action(π::MCTSSolver, s)
     A, N, Q, c = π.ℳ.A, π.N, π.Q, π.c
