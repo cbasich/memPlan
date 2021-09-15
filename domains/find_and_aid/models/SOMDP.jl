@@ -97,9 +97,9 @@ function recurse_transition(ℳ::SOMDP,
         return ℳ.M.T[s][a][s′]
     end
 
-    if s ∈ keys(ℳ.τ)
-        if a ∈ keys(ℳ.τ[s])
-            if s′ ∈ keys(ℳ.τ[s][a])
+    if haskey(ℳ.τ, s)
+        if haskey(ℳ.τ[s], a)
+            if haskey(ℳ.τ[s][a], s′)
                 return ℳ.τ[s][a][s′]
             end
         else
@@ -241,7 +241,7 @@ function simulate(ℳ::SOMDP,
     M, S, A, R, state = ℳ.M, ℳ.S, ℳ.A, ℳ.R, ℳ.s₀
     true_state, G = M.s₀, M.G
     rewards = Vector{Float64}()
-    for i = 1:100
+    for i = 1:10
         episode_reward = 0.0
         while true_state ∉ G
             if length(state.action_list) > 0
@@ -270,7 +270,7 @@ function simulate(ℳ::SOMDP, 𝒮::Union{LAOStarSolver,FLARESSolver}, 𝒱::Val
     M, S, A, R = ℳ.M, ℳ.S, ℳ.A, ℳ.R
     r = Vector{Float64}()
     # println("Expected cost to goal: $(ℒ.V[index(state, S)])")
-    for i=1:1
+    for i ∈ 1:10
         state, true_state = ℳ.s₀, M.s₀
         episode_reward = 0.0
         while true
@@ -378,7 +378,7 @@ function solve_model(ℳ, 𝒱, solver)
         println("Expected reard: $(π.Q[(s, a)])")
         return π, a
     elseif solver == "flares"
-        ℱ = FLARESSolver(100000, 4, false, false, 1000, 0.001,
+        ℱ = FLARESSolver(100000, 2, false, false, -1000, 0.001,
                          Dict{Integer, Integer}(),
                          zeros(length(ℳ.S)),
                          zeros(length(ℳ.S)),
@@ -386,6 +386,7 @@ function solve_model(ℳ, 𝒱, solver)
                          Set{Integer}(),
                          zeros(length(ℳ.A)))
         a, num = @time solve(ℱ, 𝒱, ℳ, index(s, S))
+        println("Expected reward: $(ℱ.V[index(s, S)])")
         return ℱ
     end
 end
@@ -431,5 +432,3 @@ function main(solver::String,
         println("Error.")
     end
 end
-
-main("flares", true, 1)

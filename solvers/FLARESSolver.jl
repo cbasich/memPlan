@@ -28,17 +28,17 @@ function trial(ℱ, 𝒱, M, s::Integer)
         push!(visited, current_state)
         bellman_update(ℱ, 𝒱, M, current_state)
 
-        if (accumulated_cost >= ℱ.dead_end_cost)
+        if (accumulated_cost <= ℱ.dead_end_cost)
             break
         end
 
-        greedy_action = ℱ.π[current_state]
+        greedy_action = get_greedy_action(ℱ, 𝒱, M, current_state)
         accumulated_cost += M.R(M, M.S[current_state], M.A[greedy_action])
         current_state = index(generate_successor(M, M.S[current_state], M.A[greedy_action]), M.S)
     end
     while(!isempty(visited))
         current_state = pop!(visited)
-        solved = check_solved(ℱ, current_state)
+        solved = check_solved(ℱ, 𝒱, M, current_state)
         if (!solved)
             break
         end
@@ -53,14 +53,32 @@ function residual(ℱ, 𝒱, M, s)
     if !haskey(ℱ.π, s)
         return 0.0
     end
-    a = π[s]
+    a = ℱ.π[s]
     res = lookahead(ℱ, 𝒱, M, s, a) - ℱ.V[s]
     return abs(res)
+end
+
+function get_greedy_action(ℱ, 𝒱, M, s::Integer)
+    if haskey(ℱ.π, s)
+        return ℱ.π[s]
+    else
+        besta = -1
+        bestq = ℱ.dead_end_cost #needs to be negative!!!
+        for a ∈ length(M.A)
+            tmp = lookahead(ℱ, 𝒱, M, s, a)
+            if tmp > bestq
+                bestq = tmp
+                besta = a
+            end
+        end
+        return besta
+    end
 end
 
 function check_solved(ℱ, 𝒱, M, s::Integer)
     open = []
     closed = []
+    closed_states = []
 
     current_state = s
     if !labeled_solved(ℱ, s)
@@ -76,7 +94,7 @@ function check_solved(ℱ, 𝒱, M, s::Integer)
         current_state = pp.first
         depth = pp.second
 
-        if (ℱ.useProbsForDepth && (depth < 2 * log(horizon)) || (!ℱ.useProbsForDepth && depth > 2*horizon))
+        if (ℱ.use_probs_for_depth && (depth < 2 * log(ℱ.horizon)) || (!ℱ.use_probs_for_depth && depth > 2 * ℱ.horizon))
             subgraph_within_search_horizon = false
             continue
         end
@@ -86,14 +104,16 @@ function check_solved(ℱ, 𝒱, M, s::Integer)
         end
 
         push!(closed, pp)
-        a = ℱ.π[current_state]
+        push!(closed_states, pp.first)
+        a = get_greedy_action(ℱ, 𝒱, M, current_state)
         if (residual(ℱ, 𝒱, M, current_state) > ℱ.ϵ)
             rv = false
         end
-        for sp ∈ M.S
-            prob = T(M, M.S[current_state], M.A[a])[sp]
+        successor_probs = M.T(M, M.S[current_state], M.A[a])
+        for sp ∈ 1:length(M.S)
+            prob = successor_probs[sp]
             if prob > 0
-                if !labeled_solved(ℱ, sp) && sp ∉ closed
+                if !labeled_solved(ℱ, sp) && sp ∉ closed_states
                     new_depth = compute_new_depth(ℱ, prob, depth)
                     push!(open, sp => new_depth)
                 elseif sp ∈ ℱ.dsolved && sp ∉ ℱ.solved
@@ -104,8 +124,9 @@ function check_solved(ℱ, 𝒱, M, s::Integer)
     end
 
     if rv
-        for pp ∈ closed
-            delete!(closed, pp)
+        while !isempty(closed) 
+            pp = pop!(closed)
+            _ = pop!(closed_states)
             if subgraph_within_search_horizon
                 push!(ℱ.solved, pp.first)
                 push!(ℱ.dsolved, pp.first)
@@ -119,6 +140,7 @@ function check_solved(ℱ, 𝒱, M, s::Integer)
     else
         while !isempty(closed)
             pp = pop!(closed)
+            _ = pop!(closed_states)
             bellman_update(ℱ, 𝒱, M, pp.first)
         end
     end
@@ -185,8 +207,9 @@ function solve(ℱ::FLARESSolver,
 
     trials = 0
     while (!labeled_solved(ℱ,s) && trials < ℱ.max_trials)
+        println("trial: ", trials)
         trial(ℱ, 𝒱, M, s)
         trials += 1
     end
-    return ℱ.π[s], size(ℱ.dsolved)
+    return ℱ.π[s], length(ℱ.dsolved)
 end
