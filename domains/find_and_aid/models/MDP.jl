@@ -63,7 +63,7 @@ end
 ##       don't do anything with them anyways. Still be careful...
 function generate_states(grid::Vector{Vector{Any}})
     S = Vector{DomainState}()
-    s₀ = PRESERVE_NONE
+    s₀ = -1
     𝒫 = generate_people_smoke_level_vector(grid)
     num_people = length(people_locations)
 
@@ -352,7 +352,7 @@ function run_MDP()
     simulate(ℳ, 𝒱)
 end
 
-run_MDP()
+#run_MDP()
 
 
 function generate_map(h::Int, w::Int)
