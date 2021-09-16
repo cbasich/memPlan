@@ -81,7 +81,10 @@ function generate_states(grid::Vector{Vector{Any}})
                 for mask in collect(combinations(1:num_people))
                     P = copy(𝒫)
                     P[mask] .= 0
-                    push!(S, DomainState(i, j, θ, parse(Int, loc), P))
+                    tmp = DomainState(i, j, θ, parse(Int, loc), P)
+                    if tmp ∉ S
+                        push!(S, tmp) #DomainState(i, j, θ, parse(Int, loc), P))
+                    end
                 end
             end
         end
@@ -343,10 +346,13 @@ end
 
 # Not sure if there is a better way than manually setting this?
 # people_locations = [(15,9), (4,7), (11,18)]
-people_locations = [(2,2), (4,7), (3,8)]
+#people_locations = [(3,2), (2,9), (9,8)]
+people_locations = [(15,10), (5,17), (8,5)]
+#people_locations = [(2,2), (4,7), (3,8)]
 
 function run_MDP()
-    domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_1.txt")
+#    domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_6122499651711198467.txt")
+    domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_7535492931005043827.txt")
     ℳ = build_model(domain_map_file)
     𝒱 = @time solve_model(ℳ)
     simulate(ℳ, 𝒱)
@@ -368,7 +374,7 @@ function generate_map(h::Int, w::Int)
                 write(io, 'X')
             else
                 p = rand(MT)
-                if p < 0.5
+                if p < 0.3
                     write(io, 'X')
                 elseif p < 0.6
                     write(io, '0')
