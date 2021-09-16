@@ -167,6 +167,7 @@ function generate_transitions(ℳ::SOMDP,
     elseif length(state.action_list) == ℳ.δ
         T[length(ℳ.S)] = 1.
     else
+        s, a = index(state, S), index(action, A)
         action_list′ = copy(state.action_list)
         push!(action_list′, DomainAction(action.value))
         mstate′ = MemoryState(state.state, action_list′)
@@ -237,7 +238,7 @@ end
 
 function generate_successor(ℳ::SOMDP,
                          state::MemoryState,
-                        action::MemoryAction)
+                        action::MemoryAction)::MemoryState
     thresh = rand()
     p = 0.
     T = ℳ.T(ℳ, state, action)
@@ -245,6 +246,21 @@ function generate_successor(ℳ::SOMDP,
         p += T[s′]
         if p >= thresh
             return state′
+        end
+    end
+end
+
+
+function generate_successor(ℳ::SOMDP,
+                         state::MemoryState,
+                        action::MemoryAction)::Integer
+    thresh = rand()
+    p = 0.
+    T = ℳ.T(ℳ, state, action)
+    for (s′, state′) ∈ enumerate(ℳ.S)
+        p += T[s′]
+        if p >= thresh
+            return s′
         end
     end
 end

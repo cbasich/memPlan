@@ -34,9 +34,9 @@ function trial(ℱ, 𝒱, M, s::Integer)
 
         greedy_action = get_greedy_action(ℱ, 𝒱, M, current_state)
         accumulated_cost += M.R(M, M.S[current_state], M.A[greedy_action])
-        current_state = index(generate_successor(M, M.S[current_state], M.A[greedy_action]), M.S)
+        current_state::Integer = generate_successor(M, M.S[current_state], M.A[greedy_action])
     end
-    while(!isempty(visited))
+    while (!isempty(visited))
         current_state = pop!(visited)
         solved = check_solved(ℱ, 𝒱, M, current_state)
         if (!solved)
