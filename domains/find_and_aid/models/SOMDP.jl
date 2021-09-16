@@ -116,12 +116,14 @@ function recurse_transition(ℳ::SOMDP, s::Int, a::Int, s′::Int)
     actionₚ = MemoryAction(last(state.action_list).value)
     stateₚ = MemoryState(state.state,
                          state.action_list[1:length(state.action_list)-1])
+    sₚ = index(stateₚ, ℳ.S)
+    aₚ = index(actionₚ, ℳ.A)
     p = 0.
 
     for bs=1:length(ℳ.M.S)
         q = ℳ.M.T[bs][a][s′]
         if q ≠ 0.
-            p += q * recurse_transition(ℳ, stateₚ, actionₚ, ℳ.S[bs])
+            p += q * recurse_transition(ℳ, sₚ, aₚ, bs)
         end
     end
 
@@ -157,8 +159,10 @@ function generate_transitions(ℳ::SOMDP,
         actionₚ = MemoryAction(last(state.action_list).value)
         stateₚ = MemoryState(state.state,
                              state.action_list[1:length(state.action_list)-1])
+        sₚ = index(stateₚ, ℳ.S)
+        aₚ = index(actionₚ, ℳ.A)
         for s′ = 1:length(M.S)
-            T[s′] = recurse_transition(ℳ, stateₚ, actionₚ, S[s′])
+            T[s′] = recurse_transition(ℳ, sₚ, aₚ, s′)
         end
     elseif length(state.action_list) == ℳ.δ
         T[length(ℳ.S)] = 1.
@@ -171,7 +175,7 @@ function generate_transitions(ℳ::SOMDP,
         ##       of belief state of the memory state.
         T[index(mstate′, S)] = .75
         for s′ = 1:length(M.S)
-            T[s′] = 0.25recurse_transition(ℳ, state, action, S[s′])
+            T[s′] = 0.25recurse_transition(ℳ, s, a, s′)
         end
     end
     return T
@@ -450,4 +454,4 @@ function main(solver::String,
     end
 end
 
-#main("laostar", true, 1)
+# main("laostar", false, 1)
