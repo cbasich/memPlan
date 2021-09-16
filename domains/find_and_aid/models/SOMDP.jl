@@ -91,7 +91,11 @@ function recurse_transition(ℳ::SOMDP,
                         action::MemoryAction,
                         state′::MemoryState)::Float64
     s, a, s′ = index(state, ℳ.S), index(action, ℳ.A), index(state′, ℳ.S)
+    return recurse_transition(ℳ, s, a, s′)
+end
 
+function recurse_transition(ℳ::SOMDP, s::Int, a::Int, s′::Int)
+    state, action, state′ = ℳ.S[s], ℳ.A[a], ℳ.S[s′]
     if isempty(state.action_list)
         return ℳ.M.T[s][a][s′]
     end
@@ -188,8 +192,13 @@ function generate_reward(ℳ::SOMDP,
         actionₚ = MemoryAction(last(state.action_list).value)
         stateₚ = MemoryState(state.state,
                              state.action_list[1:length(state.action_list)-1])
-        return (sum(M.R[bs][a] * recurse_transition(ℳ, stateₚ, actionₚ, S[bs])
-                                                      for bs = 1:length(M.S)))
+        sum = 0
+        sₚ = index(stateₚ, ℳ.S)
+        aₚ = index(actionₚ, ℳ.A)
+        for bs = 1:length(M.S)
+            sum += M.R[bs][a] * recurse_transition(ℳ, sₚ, aₚ, bs)
+        end
+        return sum
     end
 end
 
