@@ -250,7 +250,7 @@ function generate_rewards(S::Vector{DomainState},
     for (s, state) in enumerate(S)
         R[s] *= sum(state.𝒫)
         if state.x == 0
-            R[s] -= 2.0 * ceil(sqrt(length(S)))
+            R[s] .-= 2.0 * ceil(sqrt(length(S)))
         end
     end
     return R
