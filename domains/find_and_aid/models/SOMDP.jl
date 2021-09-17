@@ -38,10 +38,9 @@ struct SOMDP
     M::MDP
     S::Vector{MemoryState}
     A::Vector{MemoryAction}
-    T::Function
+    T::Dict{Int, Dict{Int, Vector{Tuple{Int, Float64}}}}
     R::Function
    s₀::MemoryState
-    τ::Dict{Int, Dict{Int, Dict{Int, Float64}}}
     δ::Integer
     H::Function
 end
@@ -79,12 +78,21 @@ end
 function generate_actions(M::MDP)
     A = [MemoryAction(a.value) for a in M.A]
     push!(A, MemoryAction("QUERY"))
+    print(A)
     return A
+end
+
+function eta(state::MemoryState)
+    return 1 - (0.3 * state.state.𝓁)
+end
+
+function eta(state::DomainState)
+    return 1 - (0.3 * state.𝓁)
 end
 
 function eta(action::MemoryAction,
              state′::MemoryState)
-    return 0.3 * state′.state.𝓁
+    return 1 - (0.3 * state′.state.𝓁)
 end
 
 function recurse_transition(ℳ::SOMDP,
@@ -96,22 +104,27 @@ function recurse_transition(ℳ::SOMDP,
 end
 
 function recurse_transition(ℳ::SOMDP, s::Int, a::Int, s′::Int)
-    state, action, state′ = ℳ.S[s], ℳ.A[a], ℳ.S[s′]
-    if isempty(state.action_list)
+    if s ≦ length(ℳ.M.S)
         return ℳ.M.T[s][a][s′]
     end
 
-    if haskey(ℳ.τ, s)
-        if haskey(ℳ.τ[s], a)
-            if haskey(ℳ.τ[s][a], s′)
-                return ℳ.τ[s][a][s′]
-            end
-        else
-            ℳ.τ[s][a] = Dict{Int, Float64}()
-        end
-    else
-        ℳ.τ[s] = Dict(a => Dict{Int, Float64}())
+    T = ℳ.τ[s][a]
+    mass = 0.0
+    for (bs, b) in T
+        mass += b
     end
+
+    # if haskey(ℳ.τ, s)
+    #     if haskey(ℳ.τ[s], a)
+    #         if haskey(ℳ.τ[s][a], s′)
+    #             return ℳ.τ[s][a][s′]
+    #         end
+    #     else
+    #         ℳ.τ[s][a] = Dict{Int, Float64}()
+    #     end
+    # else
+    #     ℳ.τ[s] = Dict(a => Dict{Int, Float64}())
+    # end
 
     actionₚ = MemoryAction(last(state.action_list).value)
     stateₚ = MemoryState(state.state,
@@ -131,107 +144,175 @@ function recurse_transition(ℳ::SOMDP, s::Int, a::Int, s′::Int)
     return p
 end
 
-function generate_transitions(ℳ::SOMDP,
-                           state::MemoryState,
-                          action::MemoryAction)
-    M, S, A = ℳ.M, ℳ.S, ℳ.A
-    T = zeros(length(S))
-    if state.state.x == -1
-        T[length(ℳ.S)] = 1.0
-        return T
+function generate_transitions(ℳ::SOMDP)
+    M, S, A, T = ℳ.M, ℳ.S, ℳ.A, ℳ.T
+    for (s, state) in enumerate(S)
+        T[s] = Dict{Int, Vector{Pair{Int, Float64}}}()
+        for (a, action) in enumerate(A)
+            T[s][a] = generate_transitions(ℳ, s, a)
+        end
     end
+end
+
+function generate_transitions(ℳ::SOMDP, s::Int, a::Int)
+    M, S, A = ℳ.M, ℳ.S, ℳ.A
+    state, action = S[s], A[a]
+    if state.state.x == -1
+        return [(s, 1.0)]
+    end
+
+    T = Vector{Tuple{Int, Float64}}()
+    # Inside a domain state
     if isempty(state.action_list)
-        s, a = index(state, S), index(action, A)
-        if action.value == "QUERY"
-            T[s] = 1.
-            return T
-        elseif maximum(M.T[s][a]) == 1.
-            T[argmax(M.T[s][a])] = 1.
-            return T
+        if action.value == "QUERY" # Do nothing
+            return [(s, 1.0)]
         else
-            ms′ = length(M.S) + length(M.A) * (s-1) + a
-            T[ms′] = eta(action, ℳ.S[ms′])
-            for (s′, state′) in enumerate(M.S)
-                T[s′] = M.T[s][a][s′] * (1 - T[ms′])
+            i = argmax(M.T[s][a])
+            if M.T[i] == 1.0
+                return [(i, 1.0)]
+            else
+                mass = 0.0
+                for (s′, state′) in enumerate(M.S)
+                    p = M.T[s][a][s′]
+                    if p != 0.0
+                        p *= eta(state′)
+                    end
+                    mass += p
+                    push!(T, (s′, p))
+                end
+                ms′ = length(M.S) + length(M.A) * (s-1) + a
+                push!(T, (ms′, 1.0 - mass))
             end
         end
-    elseif action.value == "QUERY"
-        actionₚ = MemoryAction(last(state.action_list).value)
-        stateₚ = MemoryState(state.state,
-                             state.action_list[1:length(state.action_list)-1])
-        sₚ = index(stateₚ, ℳ.S)
-        aₚ = index(actionₚ, ℳ.A)
+    elseif action.value == "QUERY"  # Here and below is in memory state
+        prev_action = MemoryAction(last(state.action_list).value)
+        p_a = index(prev_action, A)
+        prev_state = MemoryState(state.state,
+                      state.action_list[1:length(state.action_list) - 1])
+        p_s = index(prev_state, S)
         for s′ = 1:length(M.S)
-            T[s′] = recurse_transition(ℳ, sₚ, aₚ, s′)
+            mass = 0.0
+            for (bs, b) in ℳ.T[p_s][a]
+                for (bs′, b′) in ℳ.T[bs][p_a]
+                    if bs′ == s′
+                        mass += b * b'
+                    end
+                end
+            end
+            if mass != 0.0
+                push!(T, (s′, mass))
+            end
         end
     elseif length(state.action_list) == ℳ.δ
-        T[length(ℳ.S)] = 1.
-    else
-        s, a = index(state, S), index(action, A)
-        action_list′ = copy(state.action_list)
+        return [(length(ℳ.S), 1.0)]
+    else # Taking non-query action in memory state before depth δ is reached
+        belief_state = ℳ.T[s][length(A)]
+
+        action_list′ = [action for action in state.action_list]
         push!(action_list′, DomainAction(action.value))
         mstate′ = MemoryState(state.state, action_list′)
-        ## TODO: Below, we assume a fixed value of gaining observability from a
-        ##       memory state. THis part should be changed to be based on eta
-        ##       of belief state of the memory state.
-        T[index(mstate′, S)] = .75
-        for s′ = 1:length(M.S)
-            T[s′] = 0.25recurse_transition(ℳ, s, a, s′)
+        ms′ = index(mstate′, S)
+
+        mass = 0.0
+        for (bs, b) in belief_state
+            for s′ = 1:length(M.S)
+                p = M.T[bs][a][s′]
+                if p == 0.0
+                    continue
+                end
+                p′ = b * p * eta(S[s′])
+                mass += p′
+                push!(T, (s′, p′))
+            end
         end
+        push!(T, (ms′, 1.0-mass))
     end
     return T
 end
 
-function generate_reward(ℳ::SOMDP,
-                      state::MemoryState,
-                     action::MemoryAction)
+# function generate_transitions(ℳ::SOMDP,
+#                            state::MemoryState,
+#                           action::MemoryAction)
+#     M, S, A = ℳ.M, ℳ.S, ℳ.A
+#     T = zeros(length(S))
+#     if state.state.x == -1
+#         T[length(ℳ.S)] = 1.0
+#         return T
+#     end
+#     if isempty(state.action_list)
+#         s, a = index(state, S), index(action, A)
+#         if action.value == "QUERY"
+#             T[s] = 1.
+#             return T
+#         elseif maximum(M.T[s][a]) == 1.
+#             T[argmax(M.T[s][a])] = 1.
+#             return T
+#         else
+#             ms′ = length(M.S) + length(M.A) * (s-1) + a
+#             T[ms′] = eta(action, ℳ.S[ms′])
+#             for (s′, state′) in enumerate(M.S)
+#                 T[s′] = M.T[s][a][s′] * (1 - T[ms′])
+#             end
+#         end
+#     elseif action.value == "QUERY"
+#         actionₚ = MemoryAction(last(state.action_list).value)
+#         stateₚ = MemoryState(state.state,
+#                              state.action_list[1:length(state.action_list)-1])
+#         sₚ = index(stateₚ, ℳ.S)
+#         aₚ = index(actionₚ, ℳ.A)
+#         for s′ = 1:length(M.S)
+#             T[s′] = recurse_transition(ℳ, sₚ, aₚ, s′)
+#         end
+#     elseif length(state.action_list) == ℳ.δ
+#         T[length(ℳ.S)] = 1.
+#     else
+#         s, a = index(state, S), index(action, A)
+#         action_list′ = copy(state.action_list)
+#         push!(action_list′, DomainAction(action.value))
+#         mstate′ = MemoryState(state.state, action_list′)
+#         ## TODO: Below, we assume a fixed value of gaining observability from a
+#         ##       memory state. This part should be changed to be based on eta
+#         ##       of belief state of the memory state.
+#         T[index(mstate′, S)] = .75
+#         for s′ = 1:length(M.S)
+#             T[s′] = 0.25recurse_transition(ℳ, s, a, s′)
+#         end
+#     end
+#     return T
+# end
+
+function generate_reward(ℳ::SOMDP, s::Int, a::Int)
     M, S, A = ℳ.M, ℳ.S, ℳ.A
+    state, action = S[s], A[a]
     if state.state.x == -1
         return -10
-    end
-    if action.value == "QUERY"
-        return -3.  ## TODO: Adjust this cost somehow??
+    elseif action.value == "QUERY"
+        return -2 * sum(state.state.𝒫)
     elseif length(state.action_list) == 0
-        return M.R[index(state, S)][index(action, A)]
+        return M.R[s][a]
     else
-        a = index(action, A)
-        actionₚ = MemoryAction(last(state.action_list).value)
-        stateₚ = MemoryState(state.state,
-                             state.action_list[1:length(state.action_list)-1])
-        sum = 0
-        sₚ = index(stateₚ, ℳ.S)
-        aₚ = index(actionₚ, ℳ.A)
-        for bs = 1:length(M.S)
-            sum += M.R[bs][a] * recurse_transition(ℳ, sₚ, aₚ, bs)
+        r = 0.0
+        for (bs, b) in ℳ.T[s][length(A)]
+            r += b * ℳ.M.R[bs][a]
         end
-        return sum
+        return r
     end
 end
 
-function generate_heuristic(ℳ::SOMDP,
-                             V::Vector{Float64},
-                         state::MemoryState,
-                        action::MemoryAction)
+function generate_heuristic(ℳ::SOMDP, V::Vector{Float64}, s::Int, a::Int)
     M, S, A = ℳ.M, ℳ.S, ℳ.A
+    state, action = S[s], A[a]
     if state.state.x == -1
         return 0.
     end
     if length(state.action_list) == 0
-        return V[index(state, S)]
+        return V[s]
     else
-        actionₚ = MemoryAction(last(state.action_list).value)
-        stateₚ = MemoryState(state.state,
-                            state.action_list[1:length(state.action_list)-1])
         h = 0.0
-        for bs = 1:length(M.S)
-            v = V[bs]
-            if v ≠ 0.0
-                h += v * recurse_transition(ℳ, stateₚ, actionₚ, S[bs])
-            end
+        for (bs, b) in ℳ.T[s][length(A)]
+            h += b * V[bs]
         end
         return h
-        # return (sum(V[bs] * recurse_transition(ℳ, stateₚ, actionₚ, S[bs])
-        #                                          for bs = 1:length(M.S)))
     end
     return 0.
 end
@@ -252,11 +333,11 @@ end
 
 
 function generate_successor(ℳ::SOMDP,
-                         state::MemoryState,
-                        action::MemoryAction)::Integer
+                             s::Integer,
+                             a::Integer)::Integer
     thresh = rand()
     p = 0.
-    T = ℳ.T(ℳ, state, action)
+    T = ℳ.T(ℳ, ℳ.S[s], ℳ.A[a])
     for (s′, state′) ∈ enumerate(ℳ.S)
         p += T[s′]
         if p >= thresh
@@ -383,9 +464,9 @@ function build_model(M::MDP,
                      δ::Int)
     S, s₀ = generate_states(M, δ)
     A = generate_actions(M)
-    τ = Dict{Int, Dict{Int, Dict{Int, Float64}}}()
-    ℳ = SOMDP(M, S, A, generate_transitions, generate_reward, s₀,
-                   τ, δ, generate_heuristic)
+    T = Dict{Int, Dict{Int, Vector{Tuple{Int, Float64}}}}()
+    ℳ = SOMDP(M, S, A, T, generate_reward, s₀, δ, generate_heuristic)
+    generate_transitions(ℳ)
     return ℳ
 end
 
@@ -470,4 +551,4 @@ function main(solver::String,
     end
 end
 
-# main("laostar", false, 1)
+main("laostar", false, 1)

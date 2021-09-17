@@ -346,19 +346,26 @@ end
 
 # Not sure if there is a better way than manually setting this?
 # people_locations = [(15,9), (4,7), (11,18)]
-#people_locations = [(3,2), (2,9), (9,8)]
-people_locations = [(15,10), (5,17), (8,5)]
-#people_locations = [(2,2), (4,7), (3,8)]
+# people_locations = [(3,2), (2,9), (9,8)]
+# people_locations = [(15,10), (5,17), (8,5)]
+people_locations = [(2,2), (4,7), (3,8)]
+
+# 37511
+# people_locations = [(7, 19), (14, 9), (6, 2)]
+
+# Collapse 2
+# people_locations = [(7, 19), (10, 12), (6, 2)]
 
 function run_MDP()
-#    domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_6122499651711198467.txt")
-    domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_7535492931005043827.txt")
+    domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
+    println("Building Model...")
     ℳ = build_model(domain_map_file)
+    println("Solving Model...")
     𝒱 = @time solve_model(ℳ)
     simulate(ℳ, 𝒱)
 end
 
-#run_MDP()
+# run_MDP()
 
 
 function generate_map(h::Int, w::Int)
@@ -393,4 +400,4 @@ function generate_map(h::Int, w::Int)
     close(io)
 end
 
-# generate_map(20, 20)
+generate_map(20, 20)
