@@ -1,9 +1,12 @@
 using Combinatorics
 using Statistics
+using AutoHashEquals
 
 import Base.==
 
 include(joinpath(@__DIR__, "..", "..", "..", "solvers", "VIMDPSolver.jl"))
+
+
 
 function index(element, collection)
     for i=1:length(collection)
@@ -14,7 +17,7 @@ function index(element, collection)
     return -1
 end
 
-struct DomainState
+@auto_hash_equals struct DomainState
     x::Integer
     y::Integer
     θ::Char
@@ -26,7 +29,7 @@ function ==(a::DomainState, b::DomainState)
     return a.x == b.x && a.y == b.y && a.θ == b.θ && a.𝓁 == b.𝓁 && a.𝒫 == b.𝒫
 end
 
-struct DomainAction
+@auto_hash_equals struct DomainAction
     value::Union{String,Char}
 end
 
@@ -36,6 +39,8 @@ struct MDP
     T
     R
     s₀
+    Sindex::Dict{DomainState, Integer}
+    Aindex::Dict{DomainAction, Integer}
 end
 
 function generate_people_smoke_level_vector(grid::Vector{Vector{Any}})
@@ -289,6 +294,15 @@ function check_transition_validity(T, S, A)
     end
 end
 
+function MDP(S::Vector{DomainState},
+             A::Vector{DomainAction},
+             T,
+             R,
+             s₀)
+    Sindex, Aindex = generate_dicts(S,A)
+    return MDP(S, A, T, R, s₀, Sindex, Aindex)
+end
+
 function build_model(filepath::String)
     grid = generate_grid(filepath)
     S, s₀ = generate_states(grid)
@@ -299,6 +313,19 @@ function build_model(filepath::String)
     ℳ = MDP(S, A, T, R, s₀)
     return ℳ
 end
+
+function generate_dicts(S, A)
+    Sindex = Dict{DomainState, Integer}()
+    for (i, s) ∈ enumerate(S)
+        Sindex[s] = i
+    end
+    Aindex = Dict{DomainAction, Integer}()
+    for (i, a) ∈ enumerate(A)
+        Aindex[a] = i
+    end
+    return Sindex, Aindex
+end
+
 
 function solve_model(ℳ::MDP)
     𝒱 = ValueIterationSolver(.001,
