@@ -400,4 +400,4 @@ function generate_map(h::Int, w::Int)
     close(io)
 end
 
-generate_map(20, 20)
+# generate_map(20, 20)

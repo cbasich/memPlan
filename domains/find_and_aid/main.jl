@@ -4,11 +4,11 @@
 
 
 ## LOCAL DIRECTORIES
-include(joinpath(@__DIR, "models", "SOMDP.jl"))
+include(joinpath(@__DIR__, "models", "SOMDP.jl"))
 
 
 ## PARAMS
-MAP_PATH = joinpath(@__DIR__, "maps", "collapse_3751139720432660911.txt")
+MAP_PATH = joinpath(@__DIR__, "maps", "collapse_1.txt")
 SOLVER = "laostar"
 SIM = false
 SIM_COUNT = 1
@@ -24,7 +24,7 @@ println("Solving MDP...")
 println("Building SOMDP...")
 ℳ = build_model(M, DEPTH)
 println("Solving SOMDP...")
-solver = @time solve(ℳ, SOLVER)
+solver = @time solve(ℳ, 𝒱, SOLVER)
 
 if SIM
     println("Simulating...")

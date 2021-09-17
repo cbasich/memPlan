@@ -78,7 +78,6 @@ end
 function generate_actions(M::MDP)
     A = [MemoryAction(a.value) for a in M.A]
     push!(A, MemoryAction("QUERY"))
-    print(A)
     return A
 end
 
@@ -154,6 +153,25 @@ function generate_transitions(ℳ::SOMDP)
     end
 end
 
+function check_transition_validity(ℳ::SOMDP)
+    M, S, A, T = ℳ.M, ℳ.S, ℳ.A, ℳ.T
+    for (s, state) in enumerate(S)
+        for (a, action) in enumerate(A)
+            mass = 0.0
+            for (s′, p) in T[s][a]
+                mass += p
+            end
+            if mass != 1.0
+                println("Transition error at state $state and action $action.")
+                println("State index: $s      Action index: $a")
+                println("Total probability mass of $mass.")
+                println("Transition vector is the following: \n $(T[s][a])")
+                @assert false
+            end
+        end
+    end
+end
+
 function generate_transitions(ℳ::SOMDP, s::Int, a::Int)
     M, S, A = ℳ.M, ℳ.S, ℳ.A
     state, action = S[s], A[a]
@@ -174,9 +192,10 @@ function generate_transitions(ℳ::SOMDP, s::Int, a::Int)
                 mass = 0.0
                 for (s′, state′) in enumerate(M.S)
                     p = M.T[s][a][s′]
-                    if p != 0.0
-                        p *= eta(state′)
+                    if p == 0.0
+                        continue
                     end
+                    p *= eta(state′)
                     mass += p
                     push!(T, (s′, p))
                 end
@@ -195,7 +214,7 @@ function generate_transitions(ℳ::SOMDP, s::Int, a::Int)
             for (bs, b) in ℳ.T[p_s][a]
                 for (bs′, b′) in ℳ.T[bs][p_a]
                     if bs′ == s′
-                        mass += b * b'
+                        mass += b * ℳ.M.T[bs][p_a][bs′]
                     end
                 end
             end
@@ -287,7 +306,8 @@ function generate_reward(ℳ::SOMDP, s::Int, a::Int)
     if state.state.x == -1
         return -10
     elseif action.value == "QUERY"
-        return -2 * sum(state.state.𝒫)
+        # return (-2 * sum(state.state.𝒫))
+        return -5
     elseif length(state.action_list) == 0
         return M.R[s][a]
     else
@@ -376,19 +396,25 @@ function simulate(ℳ::SOMDP,
     println("Average cost to goal: $cum_cost")
 end
 
-function simulate(ℳ::SOMDP, 𝒮::Union{LAOStarSolver,FLARESSolver}, 𝒱::ValueIterationSolver)
+function simulate(ℳ::SOMDP,
+                   𝒱::ValueIterationSolver,
+                   𝒮::Union{LAOStarSolver,FLARESSolver},
+                   m::Int,
+                   v::Bool)
     M, S, A, R = ℳ.M, ℳ.S, ℳ.A, ℳ.R
     r = Vector{Float64}()
     # println("Expected cost to goal: $(ℒ.V[index(state, S)])")
-    for i ∈ 1:10
+    for i ∈ 1:m
         state, true_state = ℳ.s₀, M.s₀
         episode_reward = 0.0
         while true
             s = index(state, S)
             a = 𝒮.π[s]
             action = A[a]
-            println("Taking action $action in memory state $state
-                                           in true state $true_state.")
+            if v
+                println("Taking action $action in memory state $state
+                                               in true state $true_state.")
+            end
             if action.value == "QUERY"
                 state = MemoryState(true_state, Vector{DomainAction}())
                 episode_reward -= 3
@@ -404,8 +430,10 @@ function simulate(ℳ::SOMDP, 𝒮::Union{LAOStarSolver,FLARESSolver}, 𝒱::Val
             end
 
             if terminal(state) || terminal(true_state)
-                println("Terminating in state $state and
-                                   true state $true_state.")
+                if v
+                    println("Terminating in state $state and
+                                       true state $true_state.")
+                end
                 break
             end
         end
@@ -467,6 +495,8 @@ function build_model(M::MDP,
     T = Dict{Int, Dict{Int, Vector{Tuple{Int, Float64}}}}()
     ℳ = SOMDP(M, S, A, T, generate_reward, s₀, δ, generate_heuristic)
     generate_transitions(ℳ)
+    println("Checking transition validity")
+    check_transition_validity(ℳ)
     return ℳ
 end
 
@@ -509,46 +539,46 @@ function solve_model(ℳ, 𝒱, solver)
     end
 end
 
-function main(solver::String,
-                 sim::Bool,
-                   δ::Int)
-    domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_1.txt")
-
-    println("Starting...")
-    M = build_model(domain_map_file)
-    𝒱 = solve_model(M)
-
-    ℳ = @time build_model(M, δ)
-    println("Total states: $(length(ℳ.S))")
-
+function solve(ℳ, 𝒱, solver::String)
     if solver == "laostar"
-        ℒ = solve_model(ℳ, 𝒱, solver)
-        if sim
-            println("Simulating...")
-            simulate(ℳ, ℒ, 𝒱)
-        end
+        return solve_model(ℳ, 𝒱, solver)
     elseif solver == "uct"
-        𝒰 = solve_model(ℳ, 𝒱, solver)
-        if sim
-            println("Simulating...")
-            simulate(ℳ, 𝒱, 𝒰)
-        end
+        return solve_model(ℳ, 𝒱, solver)
     elseif solver == "mcts"
-        π, a = solve_model(ℳ, 𝒱, solver)
-        # expected_cost = π.Q[(ℳ.s₀, a)]
-        if sim
-            println("Simulating...")
-            simulate(ℳ, 𝒱, π)
-        end
+        return solve_model(ℳ, 𝒱, solver)
     elseif solver == "flares"
-        ℱ = solve_model(ℳ, 𝒱, solver)
-        if sim
-            println("Simulating")
-            simulate(ℳ, ℱ, 𝒱)
-        end
+        return solve_model(ℳ, 𝒱, solver)
     else
         println("Error.")
     end
 end
 
-main("laostar", false, 1)
+## This is for Connor's benefit running in IDE
+
+# function run_somdp()
+#     ## PARAMS
+#     MAP_PATH = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
+#     SOLVER = "laostar"
+#     SIM = false
+#     SIM_COUNT = 1
+#     VERBOSE = false
+#     DEPTH = 1
+#
+#
+#     ## MAIN SCRIPT
+#     println("Building MDP...")
+#     M = build_model(MAP_PATH)
+#     println("Solving MDP...")
+#     𝒱 = solve_model(M)
+#     println("Building SOMDP...")
+#     ℳ = build_model(M, DEPTH)
+#     println("Solving SOMDP...")
+#     solver = @time solve(ℳ, 𝒱, SOLVER)
+#
+#     if SIM
+#         println("Simulating...")
+#         simulate(ℳ, 𝒱, solver, SIM_COUNT, VERBOSE)
+#     end
+# end
+
+# run_somdp()

@@ -65,6 +65,7 @@ function lookahead(ℒ::LAOStarSolver,
             q += p * H(M, 𝒱.V, s, a)
         end
     end
+    println(q + R(M,s,a))
     return q + R(M,s,a)
 end
 
