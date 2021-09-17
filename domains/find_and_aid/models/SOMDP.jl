@@ -94,60 +94,60 @@ function eta(action::MemoryAction,
     return 1 - (0.3 * state′.state.𝓁)
 end
 
-function recurse_transition(ℳ::SOMDP,
-                         state::MemoryState,
-                        action::MemoryAction,
-                        state′::MemoryState)::Float64
-    s, a, s′ = index(state, ℳ.S), index(action, ℳ.A), index(state′, ℳ.S)
-    return recurse_transition(ℳ, s, a, s′)
-end
+# function recurse_transition(ℳ::SOMDP,
+#                          state::MemoryState,
+#                         action::MemoryAction,
+#                         state′::MemoryState)::Float64
+#     s, a, s′ = index(state, ℳ.S), index(action, ℳ.A), index(state′, ℳ.S)
+#     return recurse_transition(ℳ, s, a, s′)
+# end
 
-function recurse_transition(ℳ::SOMDP, s::Int, a::Int, s′::Int)
-    if s ≦ length(ℳ.M.S)
-        return ℳ.M.T[s][a][s′]
-    end
-
-    T = ℳ.τ[s][a]
-    mass = 0.0
-    for (bs, b) in T
-        mass += b
-    end
-
-    # if haskey(ℳ.τ, s)
-    #     if haskey(ℳ.τ[s], a)
-    #         if haskey(ℳ.τ[s][a], s′)
-    #             return ℳ.τ[s][a][s′]
-    #         end
-    #     else
-    #         ℳ.τ[s][a] = Dict{Int, Float64}()
-    #     end
-    # else
-    #     ℳ.τ[s] = Dict(a => Dict{Int, Float64}())
-    # end
-
-    actionₚ = MemoryAction(last(state.action_list).value)
-    stateₚ = MemoryState(state.state,
-                         state.action_list[1:length(state.action_list)-1])
-    sₚ = index(stateₚ, ℳ.S)
-    aₚ = index(actionₚ, ℳ.A)
-    p = 0.
-
-    for bs=1:length(ℳ.M.S)
-        q = ℳ.M.T[bs][a][s′]
-        if q ≠ 0.
-            p += q * recurse_transition(ℳ, sₚ, aₚ, bs)
-        end
-    end
-
-    ℳ.τ[s][a][s′] = p
-    return p
-end
+# function recurse_transition(ℳ::SOMDP, s::Int, a::Int, s′::Int)
+#     if s ≦ length(ℳ.M.S)
+#         return ℳ.M.T[s][a][s′]
+#     end
+#
+#     T = ℳ.τ[s][a]
+#     mass = 0.0
+#     for (bs, b) in T
+#         mass += b
+#     end
+#
+#     # if haskey(ℳ.τ, s)
+#     #     if haskey(ℳ.τ[s], a)
+#     #         if haskey(ℳ.τ[s][a], s′)
+#     #             return ℳ.τ[s][a][s′]
+#     #         end
+#     #     else
+#     #         ℳ.τ[s][a] = Dict{Int, Float64}()
+#     #     end
+#     # else
+#     #     ℳ.τ[s] = Dict(a => Dict{Int, Float64}())
+#     # end
+#
+#     actionₚ = MemoryAction(last(state.action_list).value)
+#     stateₚ = MemoryState(state.state,
+#                          state.action_list[1:length(state.action_list)-1])
+#     sₚ = index(stateₚ, ℳ.S)
+#     aₚ = index(actionₚ, ℳ.A)
+#     p = 0.
+#
+#     for bs=1:length(ℳ.M.S)
+#         q = ℳ.M.T[bs][a][s′]
+#         if q ≠ 0.
+#             p += q * recurse_transition(ℳ, sₚ, aₚ, bs)
+#         end
+#     end
+#
+#     ℳ.τ[s][a][s′] = p
+#     return p
+# end
 
 function generate_transitions(ℳ::SOMDP)
     M, S, A, T = ℳ.M, ℳ.S, ℳ.A, ℳ.T
     for (s, state) in enumerate(S)
         T[s] = Dict{Int, Vector{Pair{Int, Float64}}}()
-        for (a, action) in enumerate(A)
+        for (a, action) in Iterators.reverse(enumerate(A))
             T[s][a] = generate_transitions(ℳ, s, a)
         end
     end
@@ -161,7 +161,7 @@ function check_transition_validity(ℳ::SOMDP)
             for (s′, p) in T[s][a]
                 mass += p
             end
-            if mass != 1.0
+            if round(mass; digits=5) != 1.0
                 println("Transition error at state $state and action $action.")
                 println("State index: $s      Action index: $a")
                 println("Total probability mass of $mass.")
@@ -197,10 +197,10 @@ function generate_transitions(ℳ::SOMDP, s::Int, a::Int)
                     end
                     p *= eta(state′)
                     mass += p
-                    push!(T, (s′, p))
+                    push!(T, (s′, round(p; digits=5)))
                 end
                 ms′ = length(M.S) + length(M.A) * (s-1) + a
-                push!(T, (ms′, 1.0 - mass))
+                push!(T, (ms′, 1.0 - round(mass; digits=5)))
             end
         end
     elseif action.value == "QUERY"  # Here and below is in memory state
@@ -209,42 +209,74 @@ function generate_transitions(ℳ::SOMDP, s::Int, a::Int)
         prev_state = MemoryState(state.state,
                       state.action_list[1:length(state.action_list) - 1])
         p_s = index(prev_state, S)
-        for s′ = 1:length(M.S)
-            mass = 0.0
-            for (bs, b) in ℳ.T[p_s][a]
-                for (bs′, b′) in ℳ.T[bs][p_a]
-                    if bs′ == s′
-                        mass += b * ℳ.M.T[bs][p_a][bs′]
-                    end
+
+        len = length(ℳ.M.S)
+        tmp = Dict{Int, Float64}()
+        for (bs, b) in ℳ.T[p_s][a]
+            for (bs′, b′) in ℳ.T[bs][p_a]
+                if bs′ > len
+                    continue
                 end
-            end
-            if mass != 0.0
-                push!(T, (s′, mass))
+                if !haskey(tmp, bs′)
+                    tmp[bs′] = 0.0
+                end
+                tmp[bs′] += b * ℳ.M.T[bs][p_a][bs′]
             end
         end
+        for k in keys(tmp)
+            push!(T, (k, round(tmp[k]; digits=5)))
+        end
+        # for s′ = 1:length(M.S)
+        #     mass = 0.0
+        #     for (bs, b) in ℳ.T[p_s][a]
+        #         for (bs′, b′) in ℳ.T[bs][p_a]
+        #             if bs′ == s′
+        #                 mass += b * ℳ.M.T[bs][p_a][bs′]
+        #             end
+        #         end
+        #     end
+        #     if mass != 0.0
+        #         push!(T, (s′, round(mass; digits=5)))
+        #     end
+        # end
     elseif length(state.action_list) == ℳ.δ
         return [(length(ℳ.S), 1.0)]
     else # Taking non-query action in memory state before depth δ is reached
-        belief_state = ℳ.T[s][length(A)]
-
         action_list′ = [action for action in state.action_list]
         push!(action_list′, DomainAction(action.value))
         mstate′ = MemoryState(state.state, action_list′)
         ms′ = index(mstate′, S)
 
+        tmp = Dict{Int, Float64}()
+        len = length(ℳ.M.S)
         mass = 0.0
-        for (bs, b) in belief_state
-            for s′ = 1:length(M.S)
-                p = M.T[bs][a][s′]
-                if p == 0.0
+        for (bs, b) in ℳ.T[s][length(A)]
+            for (bs′, b′) in ℳ.T[bs][a]
+                if bs′ > len
                     continue
                 end
-                p′ = b * p * eta(S[s′])
-                mass += p′
-                push!(T, (s′, p′))
+                if !haskey(tmp, bs′)
+                    tmp[bs′] = 0.0
+                end
+                tmp[bs′] += b * M.T[bs][a][bs′] * eta(S[bs′])
             end
         end
-        push!(T, (ms′, 1.0-mass))
+        for k in keys(tmp)
+            mass += tmp[k]
+            push!(T, (k, round(tmp[k]; digits=5)))
+        end
+
+        #     for s′ = 1:length(M.S)
+        #         p = M.T[bs][a][s′]
+        #         if p == 0.0
+        #             continue
+        #         end
+        #         p′ = b * p * eta(S[s′])
+        #         mass += p′
+        #         push!(T, (s′, round(p′; digits=5)))
+        #     end
+        # end
+        push!(T, (ms′, round(1.0-mass; digits=5)))
     end
     return T
 end
@@ -553,32 +585,32 @@ function solve(ℳ, 𝒱, solver::String)
     end
 end
 
-## This is for Connor's benefit running in IDE
+# This is for Connor's benefit running in IDE
 
-# function run_somdp()
-#     ## PARAMS
-#     MAP_PATH = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
-#     SOLVER = "laostar"
-#     SIM = false
-#     SIM_COUNT = 1
-#     VERBOSE = false
-#     DEPTH = 1
-#
-#
-#     ## MAIN SCRIPT
-#     println("Building MDP...")
-#     M = build_model(MAP_PATH)
-#     println("Solving MDP...")
-#     𝒱 = solve_model(M)
-#     println("Building SOMDP...")
-#     ℳ = build_model(M, DEPTH)
-#     println("Solving SOMDP...")
-#     solver = @time solve(ℳ, 𝒱, SOLVER)
-#
-#     if SIM
-#         println("Simulating...")
-#         simulate(ℳ, 𝒱, solver, SIM_COUNT, VERBOSE)
-#     end
-# end
+function run_somdp()
+    ## PARAMS
+    MAP_PATH = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
+    SOLVER = "laostar"
+    SIM = false
+    SIM_COUNT = 1
+    VERBOSE = false
+    DEPTH = 2
 
-# run_somdp()
+
+    ## MAIN SCRIPT
+    println("Building MDP...")
+    M = build_model(MAP_PATH)
+    println("Solving MDP...")
+    𝒱 = solve_model(M)
+    println("Building SOMDP...")
+    ℳ = @time build_model(M, DEPTH)
+    println("Solving SOMDP...")
+    solver = @time solve(ℳ, 𝒱, SOLVER)
+
+    if SIM
+        println("Simulating...")
+        simulate(ℳ, 𝒱, solver, SIM_COUNT, VERBOSE)
+    end
+end
+
+run_somdp()
