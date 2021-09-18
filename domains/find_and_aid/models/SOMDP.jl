@@ -26,13 +26,30 @@ struct MemoryState
     action_list::Vector{DomainAction}
 end
 
-function ==(s₁::MemoryState, s₂::MemoryState)
-    return (s₁.state == s₂.state && s₁.action_list == s₂.action_list)
+function ==(a::MemoryState, b::MemoryState)
+    return (a.state == b.state && a.action_list == b.action_list)
+end
+
+function Base.hash(a::MemoryState, h::UInt)
+    h = hash(a.state, h)
+    for act ∈ a.action_list
+        h = hash(act, h)
+    end
+    return h
 end
 
 struct MemoryAction
     value::Union{String,Char}
 end
+
+function Base.hash(a::MemoryAction, h::UInt)
+    return hash(a.value, h)
+end
+
+function ==(a::MemoryAction, b::DomainAction)
+    return isequal(a.value, b.value)
+end
+
 
 struct SOMDP
     M::MDP
@@ -43,6 +60,33 @@ struct SOMDP
    s₀::MemoryState
     δ::Integer
     H::Function
+    Sindex::Dict{MemoryState, Integer}
+    Aindex::Dict{MemoryAction, Integer}
+end
+
+function SOMDP(M::MDP,
+               S::Vector{MemoryState},
+               A::Vector{MemoryAction},
+               T::Dict{Int, Dict{Int, Vector{Tuple{Int, Float64}}}},
+               R::Function,
+               s₀::MemoryState,
+               δ::Integer,
+               H::Function)
+
+    Aindex, Sindex = generate_index_dicts(A, S)
+    ℳ = SOMDP(M, S, A, T, generate_reward, s₀, δ, generate_heuristic, Sindex, Aindex)
+end
+
+function generate_index_dicts(A::Vector{MemoryAction}, S::Vector{MemoryState})
+    Aindex = Dict{MemoryAction, Integer}()
+    for (i, a) ∈ enumerate(A)
+        Aindex[a] = i
+    end
+    Sindex = Dict{MemoryState, Integer}()
+    for (i, a) ∈ enumerate(S)
+        Sindex[a] = i
+    end
+    return Aindex, Sindex
 end
 
 function generate_states(M::MDP, δ::Integer)
@@ -93,55 +137,6 @@ function eta(action::MemoryAction,
              state′::MemoryState)
     return 1 - (0.3 * state′.state.𝓁)
 end
-
-# function recurse_transition(ℳ::SOMDP,
-#                          state::MemoryState,
-#                         action::MemoryAction,
-#                         state′::MemoryState)::Float64
-#     s, a, s′ = index(state, ℳ.S), index(action, ℳ.A), index(state′, ℳ.S)
-#     return recurse_transition(ℳ, s, a, s′)
-# end
-
-# function recurse_transition(ℳ::SOMDP, s::Int, a::Int, s′::Int)
-#     if s ≦ length(ℳ.M.S)
-#         return ℳ.M.T[s][a][s′]
-#     end
-#
-#     T = ℳ.τ[s][a]
-#     mass = 0.0
-#     for (bs, b) in T
-#         mass += b
-#     end
-#
-#     # if haskey(ℳ.τ, s)
-#     #     if haskey(ℳ.τ[s], a)
-#     #         if haskey(ℳ.τ[s][a], s′)
-#     #             return ℳ.τ[s][a][s′]
-#     #         end
-#     #     else
-#     #         ℳ.τ[s][a] = Dict{Int, Float64}()
-#     #     end
-#     # else
-#     #     ℳ.τ[s] = Dict(a => Dict{Int, Float64}())
-#     # end
-#
-#     actionₚ = MemoryAction(last(state.action_list).value)
-#     stateₚ = MemoryState(state.state,
-#                          state.action_list[1:length(state.action_list)-1])
-#     sₚ = index(stateₚ, ℳ.S)
-#     aₚ = index(actionₚ, ℳ.A)
-#     p = 0.
-#
-#     for bs=1:length(ℳ.M.S)
-#         q = ℳ.M.T[bs][a][s′]
-#         if q ≠ 0.
-#             p += q * recurse_transition(ℳ, sₚ, aₚ, bs)
-#         end
-#     end
-#
-#     ℳ.τ[s][a][s′] = p
-#     return p
-# end
 
 function generate_transitions(ℳ::SOMDP)
     M, S, A, T = ℳ.M, ℳ.S, ℳ.A, ℳ.T
@@ -205,10 +200,10 @@ function generate_transitions(ℳ::SOMDP, s::Int, a::Int)
         end
     elseif action.value == "QUERY"  # Here and below is in memory state
         prev_action = MemoryAction(last(state.action_list).value)
-        p_a = index(prev_action, A)
+        p_a = ℳ.Aindex[prev_action]
         prev_state = MemoryState(state.state,
                       state.action_list[1:length(state.action_list) - 1])
-        p_s = index(prev_state, S)
+        p_s = ℳ.Sindex[prev_state]
 
         len = length(ℳ.M.S)
         tmp = Dict{Int, Float64}()
@@ -245,7 +240,7 @@ function generate_transitions(ℳ::SOMDP, s::Int, a::Int)
         action_list′ = [action for action in state.action_list]
         push!(action_list′, DomainAction(action.value))
         mstate′ = MemoryState(state.state, action_list′)
-        ms′ = index(mstate′, S)
+        ms′ = ℳ.Sindex[mstate′]
 
         tmp = Dict{Int, Float64}()
         len = length(ℳ.M.S)
@@ -338,8 +333,7 @@ function generate_reward(ℳ::SOMDP, s::Int, a::Int)
     if state.state.x == -1
         return -10
     elseif action.value == "QUERY"
-        # return (-2 * sum(state.state.𝒫))
-        return -5
+        return (-2 * sum(state.state.𝒫))
     elseif length(state.action_list) == 0
         return M.R[s][a]
     else
@@ -374,7 +368,7 @@ function generate_successor(ℳ::SOMDP,
                         action::MemoryAction)::MemoryState
     thresh = rand()
     p = 0.
-    T = ℳ.T[index(state, ℳ.S)][index(action, ℳ.A)]
+    T = ℳ.T[ℳ.Sindex[state]][ℳ.Aindex[action]]
     for (s′, prob) ∈ T
         p += prob
         if p >= thresh
@@ -410,8 +404,8 @@ function simulate(ℳ::SOMDP,
                 cum_cost += 3
                 state = MemoryState(true_state, Vector{CampusAction}())
             else
-                s = index(state, S)
-                true_s = index(true_state, M.S)
+                s = ℳ.Sindex[state]
+                true_s = ℳ.Sindex[true_state]index(true_state, M.S)
                 a = 𝒱.π[true_s]
                 action = M.A[a]
                 memory_action = MemoryAction(action.value)
