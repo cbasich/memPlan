@@ -582,7 +582,7 @@ end
 # This is for Connor's benefit running in IDE
 
 function reachability(ℳ::SOMDP, δ::Int, 𝒮::LAOStarSolver)
-    S, state₀, T = ℳ.S, ℳ.s₀, ℳ.T
+    S, state₀, A, T = ℳ.S, ℳ.s₀, ℳ.A, ℳ.T
     s = index(state₀, S)
     π = 𝒮.π
 
@@ -599,27 +599,37 @@ function reachability(ℳ::SOMDP, δ::Int, 𝒮::LAOStarSolver)
         if length(S[s].action_list) == δ
             push!(reachable_max_depth, s)
         end
-        if !haskey(π, s)
-            println("No key for state $(S[s])")
+        if terminal(S[s])
+            continue
         end
         a = π[s]
         for (s′, p) in T[s][a]
             push!(visited, s′)
         end
     end
+    count = 0
+    for (s, state) in enumerate(S)
+        if length(state.action_list) == δ
+            count += 1
+        end
+    end
 
-    println("Reachable max depth states under optimal policy:
-                               $(length(reachable_max_depth))")
+    println("Reachable max depth states under optimal policy: $(length(reachable_max_depth))")
+    # println("Percent of total max depth states reachable under optimal policy: $(length(reachable_max_depth)/(length(S) * (length(A)^δ)))")
+    println("Percent of total max depth states reachable under optimal policy: $(length(reachable_max_depth)/count)")
 end
 
 function run_somdp()
     ## PARAMS
     MAP_PATH = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
     SOLVER = "laostar"
-    SIM = true
+    SIM = false
     SIM_COUNT = 1
     VERBOSE = true
-    DEPTH = 2
+    DEPTH = 4
+
+    ## EXPERIMENTS
+    REACHABILITY = false
 
     # PEOPLE_LOCATIONS = [(2,2), (4,7), (3,8)] # COLLAPSE 1
     PEOPLE_LOCATIONS = [(7, 19), (10, 12), (6, 2)] # COLLAPSE 2
@@ -641,7 +651,9 @@ function run_somdp()
         simulate(ℳ, 𝒱, solver, SIM_COUNT, VERBOSE)
     end
 
-    reachability(ℳ, DEPTH, solver)
+    if REACHABILITY
+        reachability(ℳ, DEPTH, solver)
+    end
 end
 
-run_somdp()
+# run_somdp()
