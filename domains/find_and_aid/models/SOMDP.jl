@@ -581,23 +581,58 @@ end
 
 # This is for Connor's benefit running in IDE
 
+function reachability(ℳ::SOMDP, δ::Int, 𝒮::LAOStarSolver)
+    S, state₀, T = ℳ.S, ℳ.s₀, ℳ.T
+    s = index(state₀, S)
+    π = 𝒮.π
+
+    reachable = Set{Int}()
+    reachable_max_depth = Set{Int}()
+    visited = Vector{Int}()
+    push!(visited, s)
+    while !isempty(visited)
+        s = pop!(visited)
+        if s ∈ reachable
+            continue
+        end
+        push!(reachable, s)
+        if length(S[s].action_list) == δ
+            push!(reachable_max_depth, s)
+        end
+        if !haskey(π, s)
+            println("No key for state $(S[s])")
+        end
+        a = π[s]
+        for (s′, p) in T[s][a]
+            push!(visited, s′)
+        end
+    end
+
+    println("Reachable max depth states under optimal policy:
+                               $(length(reachable_max_depth))")
+end
+
 function run_somdp()
     ## PARAMS
     MAP_PATH = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
     SOLVER = "laostar"
-    SIM = false
+    SIM = true
     SIM_COUNT = 1
-    VERBOSE = false
+    VERBOSE = true
     DEPTH = 2
+
+    # PEOPLE_LOCATIONS = [(2,2), (4,7), (3,8)] # COLLAPSE 1
+    PEOPLE_LOCATIONS = [(7, 19), (10, 12), (6, 2)] # COLLAPSE 2
 
 
     ## MAIN SCRIPT
     println("Building MDP...")
-    M = build_model(MAP_PATH)
+    M = build_model(MAP_PATH, PEOPLE_LOCATIONS)
     println("Solving MDP...")
     𝒱 = solve_model(M)
     println("Building SOMDP...")
     ℳ = @time build_model(M, DEPTH)
+    println("Total state: $(length(ℳ.S))")
     println("Solving SOMDP...")
     solver = @time solve(ℳ, 𝒱, SOLVER)
 
@@ -605,6 +640,8 @@ function run_somdp()
         println("Simulating...")
         simulate(ℳ, 𝒱, solver, SIM_COUNT, VERBOSE)
     end
+
+    reachability(ℳ, DEPTH, solver)
 end
 
-#run_somdp()
+run_somdp()
