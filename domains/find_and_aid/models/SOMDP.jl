@@ -1,7 +1,6 @@
 using Combinatorics
 using Statistics
 using Random
-using AutoHashEquals
 
 import Base.==
 
@@ -22,18 +21,35 @@ function index(element, collection)
     return -1
 end
 
-@auto_hash_equals struct MemoryState
+struct MemoryState
     state::DomainState
     action_list::Vector{DomainAction}
 end
 
-function ==(s₁::MemoryState, s₂::MemoryState)
-    return (s₁.state == s₂.state && s₁.action_list == s₂.action_list)
+function ==(a::MemoryState, b::MemoryState)
+    return (a.state == b.state && a.action_list == b.action_list)
 end
 
-@auto_hash_equals struct MemoryAction
+function Base.hash(a::MemoryState, h::UInt)
+    h = hash(a.state, h)
+    for act ∈ a.action_list
+        h = hash(act, h)
+    end
+    return h
+end
+
+struct MemoryAction
     value::Union{String,Char}
 end
+
+function Base.hash(a::MemoryAction, h::UInt)
+    return hash(a.value, h)
+end
+
+function ==(a::MemoryAction, b::DomainAction)
+    return isequal(a.value, b.value)
+end
+
 
 struct SOMDP
     M::MDP

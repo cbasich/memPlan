@@ -22,12 +22,31 @@ struct DomainState
     𝒫::Vector{Integer}
 end
 
+function Base.hash(a::DomainState, h::UInt)
+    h = hash(a.x, h)
+    h = hash(a.y, h)
+    h = hash(a.θ, h)
+    h = hash(a.𝓁, h)
+    for p ∈ a.𝒫
+        h = hash(p, h)
+    end
+    return h
+end
+
 function ==(a::DomainState, b::DomainState)
-    return a.x == b.x && a.y == b.y && a.θ == b.θ && a.𝓁 == b.𝓁 && a.𝒫 == b.𝒫
+    return isequal(a.x, b.x) && isequal(a.y, b.y) && isequal(a.θ, b.θ) && isequal(a.𝓁, b.𝓁) && isequal(a.𝒫, b.𝒫)
 end
 
 struct DomainAction
     value::Union{String,Char}
+end
+
+function Base.hash(a::DomainAction, h::UInt)
+    return hash(a.value, h)
+end
+
+function ==(a::DomainAction, b::DomainAction)
+    return isequal(a.value, b.value)
 end
 
 struct MDP
