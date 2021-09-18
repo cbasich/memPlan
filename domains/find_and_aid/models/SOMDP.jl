@@ -94,55 +94,6 @@ function eta(action::MemoryAction,
     return 1 - (0.3 * state′.state.𝓁)
 end
 
-# function recurse_transition(ℳ::SOMDP,
-#                          state::MemoryState,
-#                         action::MemoryAction,
-#                         state′::MemoryState)::Float64
-#     s, a, s′ = index(state, ℳ.S), index(action, ℳ.A), index(state′, ℳ.S)
-#     return recurse_transition(ℳ, s, a, s′)
-# end
-
-# function recurse_transition(ℳ::SOMDP, s::Int, a::Int, s′::Int)
-#     if s ≦ length(ℳ.M.S)
-#         return ℳ.M.T[s][a][s′]
-#     end
-#
-#     T = ℳ.τ[s][a]
-#     mass = 0.0
-#     for (bs, b) in T
-#         mass += b
-#     end
-#
-#     # if haskey(ℳ.τ, s)
-#     #     if haskey(ℳ.τ[s], a)
-#     #         if haskey(ℳ.τ[s][a], s′)
-#     #             return ℳ.τ[s][a][s′]
-#     #         end
-#     #     else
-#     #         ℳ.τ[s][a] = Dict{Int, Float64}()
-#     #     end
-#     # else
-#     #     ℳ.τ[s] = Dict(a => Dict{Int, Float64}())
-#     # end
-#
-#     actionₚ = MemoryAction(last(state.action_list).value)
-#     stateₚ = MemoryState(state.state,
-#                          state.action_list[1:length(state.action_list)-1])
-#     sₚ = index(stateₚ, ℳ.S)
-#     aₚ = index(actionₚ, ℳ.A)
-#     p = 0.
-#
-#     for bs=1:length(ℳ.M.S)
-#         q = ℳ.M.T[bs][a][s′]
-#         if q ≠ 0.
-#             p += q * recurse_transition(ℳ, sₚ, aₚ, bs)
-#         end
-#     end
-#
-#     ℳ.τ[s][a][s′] = p
-#     return p
-# end
-
 function generate_transitions(ℳ::SOMDP)
     M, S, A, T = ℳ.M, ℳ.S, ℳ.A, ℳ.T
     for (s, state) in enumerate(S)
@@ -338,8 +289,7 @@ function generate_reward(ℳ::SOMDP, s::Int, a::Int)
     if state.state.x == -1
         return -10
     elseif action.value == "QUERY"
-        # return (-2 * sum(state.state.𝒫))
-        return -5
+        return (-2 * sum(state.state.𝒫))
     elseif length(state.action_list) == 0
         return M.R[s][a]
     else
