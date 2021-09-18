@@ -374,11 +374,11 @@ function generate_successor(ℳ::SOMDP,
                         action::MemoryAction)::MemoryState
     thresh = rand()
     p = 0.
-    T = ℳ.T(ℳ, state, action)
-    for (s′, state′) ∈ enumerate(ℳ.S)
-        p += T[s′]
+    T = ℳ.T[index(state, ℳ.S)][index(action, ℳ.A)]
+    for (s′, prob) ∈ T
+        p += prob
         if p >= thresh
-            return state′
+            return ℳ.S[s′]
         end
     end
 end
@@ -389,9 +389,9 @@ function generate_successor(ℳ::SOMDP,
                              a::Integer)::Integer
     thresh = rand()
     p = 0.
-    T = ℳ.T(ℳ, ℳ.S[s], ℳ.A[a])
-    for (s′, state′) ∈ enumerate(ℳ.S)
-        p += T[s′]
+    T = ℳ.T[s][a]
+    for (s′, prob) ∈ T
+        p += prob
         if p >= thresh
             return s′
         end
@@ -613,4 +613,4 @@ function run_somdp()
     end
 end
 
-run_somdp()
+#run_somdp()
