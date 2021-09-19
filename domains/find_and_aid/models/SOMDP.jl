@@ -26,24 +26,67 @@ struct MemoryState
     action_list::Vector{DomainAction}
 end
 
-function ==(s₁::MemoryState, s₂::MemoryState)
-    return (s₁.state == s₂.state && s₁.action_list == s₂.action_list)
+function ==(a::MemoryState, b::MemoryState)
+    return (a.state == b.state && a.action_list == b.action_list)
+end
+
+function Base.hash(a::MemoryState, h::UInt)
+    h = hash(a.state, h)
+    for act ∈ a.action_list
+        h = hash(act, h)
+    end
+    return h
 end
 
 struct MemoryAction
     value::Union{String,Char}
 end
 
+function Base.hash(a::MemoryAction, h::UInt)
+    return hash(a.value, h)
+end
+
+function ==(a::MemoryAction, b::DomainAction)
+    return isequal(a.value, b.value)
+end
+
+
 struct SOMDP
     M::MDP
     S::Vector{MemoryState}
     A::Vector{MemoryAction}
-    T::Function
+    T::Dict{Int, Dict{Int, Vector{Tuple{Int, Float64}}}}
     R::Function
    s₀::MemoryState
-    τ::Dict{Int, Dict{Int, Dict{Int, Float64}}}
     δ::Integer
     H::Function
+    Sindex::Dict{MemoryState, Integer}
+    Aindex::Dict{MemoryAction, Integer}
+end
+
+function SOMDP(M::MDP,
+               S::Vector{MemoryState},
+               A::Vector{MemoryAction},
+               T::Dict{Int, Dict{Int, Vector{Tuple{Int, Float64}}}},
+               R::Function,
+               s₀::MemoryState,
+               δ::Integer,
+               H::Function)
+
+    Aindex, Sindex = generate_index_dicts(A, S)
+    ℳ = SOMDP(M, S, A, T, generate_reward, s₀, δ, generate_heuristic, Sindex, Aindex)
+end
+
+function generate_index_dicts(A::Vector{MemoryAction}, S::Vector{MemoryState})
+    Aindex = Dict{MemoryAction, Integer}()
+    for (i, a) ∈ enumerate(A)
+        Aindex[a] = i
+    end
+    Sindex = Dict{MemoryState, Integer}()
+    for (i, a) ∈ enumerate(S)
+        Sindex[a] = i
+    end
+    return Aindex, Sindex
 end
 
 function generate_states(M::MDP, δ::Integer)
@@ -82,156 +125,240 @@ function generate_actions(M::MDP)
     return A
 end
 
+function eta(state::MemoryState)
+    return 1 - (0.3 * state.state.𝓁)
+end
+
+function eta(state::DomainState)
+    return 1 - (0.3 * state.𝓁)
+end
+
 function eta(action::MemoryAction,
              state′::MemoryState)
-    return 0.3 * state′.state.𝓁
+    return 1 - (0.3 * state′.state.𝓁)
 end
 
-function recurse_transition(ℳ::SOMDP,
-                         state::MemoryState,
-                        action::MemoryAction,
-                        state′::MemoryState)::Float64
-    s, a, s′ = index(state, ℳ.S), index(action, ℳ.A), index(state′, ℳ.S)
-    return recurse_transition(ℳ, s, a, s′)
-end
-
-function recurse_transition(ℳ::SOMDP, s::Int, a::Int, s′::Int)
-    state, action, state′ = ℳ.S[s], ℳ.A[a], ℳ.S[s′]
-    if isempty(state.action_list)
-        return ℳ.M.T[s][a][s′]
+function generate_transitions(ℳ::SOMDP)
+    M, S, A, T = ℳ.M, ℳ.S, ℳ.A, ℳ.T
+    for (s, state) in enumerate(S)
+        T[s] = Dict{Int, Vector{Pair{Int, Float64}}}()
+        for (a, action) in Iterators.reverse(enumerate(A))
+            T[s][a] = generate_transitions(ℳ, s, a)
+        end
     end
+end
 
-    if haskey(ℳ.τ, s)
-        if haskey(ℳ.τ[s], a)
-            if haskey(ℳ.τ[s][a], s′)
-                return ℳ.τ[s][a][s′]
+function check_transition_validity(ℳ::SOMDP)
+    M, S, A, T = ℳ.M, ℳ.S, ℳ.A, ℳ.T
+    for (s, state) in enumerate(S)
+        for (a, action) in enumerate(A)
+            mass = 0.0
+            for (s′, p) in T[s][a]
+                mass += p
             end
-        else
-            ℳ.τ[s][a] = Dict{Int, Float64}()
-        end
-    else
-        ℳ.τ[s] = Dict(a => Dict{Int, Float64}())
-    end
-
-    actionₚ = MemoryAction(last(state.action_list).value)
-    stateₚ = MemoryState(state.state,
-                         state.action_list[1:length(state.action_list)-1])
-    sₚ = index(stateₚ, ℳ.S)
-    aₚ = index(actionₚ, ℳ.A)
-    p = 0.
-
-    for bs=1:length(ℳ.M.S)
-        q = ℳ.M.T[bs][a][s′]
-        if q ≠ 0.
-            p += q * recurse_transition(ℳ, sₚ, aₚ, bs)
+            if round(mass; digits=5) != 1.0
+                println("Transition error at state $state and action $action.")
+                println("State index: $s      Action index: $a")
+                println("Total probability mass of $mass.")
+                println("Transition vector is the following: \n $(T[s][a])")
+                @assert false
+            end
         end
     end
-
-    ℳ.τ[s][a][s′] = p
-    return p
 end
 
-function generate_transitions(ℳ::SOMDP,
-                           state::MemoryState,
-                          action::MemoryAction)
+function generate_transitions(ℳ::SOMDP, s::Int, a::Int)
     M, S, A = ℳ.M, ℳ.S, ℳ.A
-    T = zeros(length(S))
+    state, action = S[s], A[a]
     if state.state.x == -1
-        T[length(ℳ.S)] = 1.0
-        return T
+        return [(s, 1.0)]
     end
+
+    T = Vector{Tuple{Int, Float64}}()
+    # Inside a domain state
     if isempty(state.action_list)
-        s, a = index(state, S), index(action, A)
-        if action.value == "QUERY"
-            T[s] = 1.
-            return T
-        elseif maximum(M.T[s][a]) == 1.
-            T[argmax(M.T[s][a])] = 1.
-            return T
+        if action.value == "QUERY" # Do nothing
+            return [(s, 1.0)]
         else
-            ms′ = length(M.S) + length(M.A) * (s-1) + a
-            T[ms′] = eta(action, ℳ.S[ms′])
-            for (s′, state′) in enumerate(M.S)
-                T[s′] = M.T[s][a][s′] * (1 - T[ms′])
+            i = argmax(M.T[s][a])
+            if M.T[i] == 1.0
+                return [(i, 1.0)]
+            else
+                mass = 0.0
+                for (s′, state′) in enumerate(M.S)
+                    p = M.T[s][a][s′]
+                    if p == 0.0
+                        continue
+                    end
+                    p *= eta(state′)
+                    mass += p
+                    push!(T, (s′, round(p; digits=5)))
+                end
+                ms′ = length(M.S) + length(M.A) * (s-1) + a
+                push!(T, (ms′, 1.0 - round(mass; digits=5)))
             end
         end
-    elseif action.value == "QUERY"
-        actionₚ = MemoryAction(last(state.action_list).value)
-        stateₚ = MemoryState(state.state,
-                             state.action_list[1:length(state.action_list)-1])
-        sₚ = index(stateₚ, ℳ.S)
-        aₚ = index(actionₚ, ℳ.A)
-        for s′ = 1:length(M.S)
-            T[s′] = recurse_transition(ℳ, sₚ, aₚ, s′)
+    elseif action.value == "QUERY"  # Here and below is in memory state
+        prev_action = MemoryAction(last(state.action_list).value)
+        p_a = ℳ.Aindex[prev_action]
+        prev_state = MemoryState(state.state,
+                      state.action_list[1:length(state.action_list) - 1])
+        p_s = ℳ.Sindex[prev_state]
+
+        len = length(ℳ.M.S)
+        tmp = Dict{Int, Float64}()
+        for (bs, b) in ℳ.T[p_s][a]
+            for (bs′, b′) in ℳ.T[bs][p_a]
+                if bs′ > len
+                    continue
+                end
+                if !haskey(tmp, bs′)
+                    tmp[bs′] = 0.0
+                end
+                tmp[bs′] += b * ℳ.M.T[bs][p_a][bs′]
+            end
         end
+        for k in keys(tmp)
+            push!(T, (k, round(tmp[k]; digits=5)))
+        end
+        # for s′ = 1:length(M.S)
+        #     mass = 0.0
+        #     for (bs, b) in ℳ.T[p_s][a]
+        #         for (bs′, b′) in ℳ.T[bs][p_a]
+        #             if bs′ == s′
+        #                 mass += b * ℳ.M.T[bs][p_a][bs′]
+        #             end
+        #         end
+        #     end
+        #     if mass != 0.0
+        #         push!(T, (s′, round(mass; digits=5)))
+        #     end
+        # end
     elseif length(state.action_list) == ℳ.δ
-        T[length(ℳ.S)] = 1.
-    else
-        s, a = index(state, S), index(action, A)
-        action_list′ = copy(state.action_list)
+        return [(length(ℳ.S), 1.0)]
+    else # Taking non-query action in memory state before depth δ is reached
+        action_list′ = [action for action in state.action_list]
         push!(action_list′, DomainAction(action.value))
         mstate′ = MemoryState(state.state, action_list′)
-        ## TODO: Below, we assume a fixed value of gaining observability from a
-        ##       memory state. THis part should be changed to be based on eta
-        ##       of belief state of the memory state.
-        T[index(mstate′, S)] = .75
-        for s′ = 1:length(M.S)
-            T[s′] = 0.25recurse_transition(ℳ, s, a, s′)
+        ms′ = ℳ.Sindex[mstate′]
+
+        tmp = Dict{Int, Float64}()
+        len = length(ℳ.M.S)
+        mass = 0.0
+        for (bs, b) in ℳ.T[s][length(A)]
+            for (bs′, b′) in ℳ.T[bs][a]
+                if bs′ > len
+                    continue
+                end
+                if !haskey(tmp, bs′)
+                    tmp[bs′] = 0.0
+                end
+                tmp[bs′] += b * M.T[bs][a][bs′] * eta(S[bs′])
+            end
         end
+        for k in keys(tmp)
+            mass += tmp[k]
+            push!(T, (k, round(tmp[k]; digits=5)))
+        end
+
+        #     for s′ = 1:length(M.S)
+        #         p = M.T[bs][a][s′]
+        #         if p == 0.0
+        #             continue
+        #         end
+        #         p′ = b * p * eta(S[s′])
+        #         mass += p′
+        #         push!(T, (s′, round(p′; digits=5)))
+        #     end
+        # end
+        push!(T, (ms′, round(1.0-mass; digits=5)))
     end
     return T
 end
 
-function generate_reward(ℳ::SOMDP,
-                      state::MemoryState,
-                     action::MemoryAction)
+# function generate_transitions(ℳ::SOMDP,
+#                            state::MemoryState,
+#                           action::MemoryAction)
+#     M, S, A = ℳ.M, ℳ.S, ℳ.A
+#     T = zeros(length(S))
+#     if state.state.x == -1
+#         T[length(ℳ.S)] = 1.0
+#         return T
+#     end
+#     if isempty(state.action_list)
+#         s, a = index(state, S), index(action, A)
+#         if action.value == "QUERY"
+#             T[s] = 1.
+#             return T
+#         elseif maximum(M.T[s][a]) == 1.
+#             T[argmax(M.T[s][a])] = 1.
+#             return T
+#         else
+#             ms′ = length(M.S) + length(M.A) * (s-1) + a
+#             T[ms′] = eta(action, ℳ.S[ms′])
+#             for (s′, state′) in enumerate(M.S)
+#                 T[s′] = M.T[s][a][s′] * (1 - T[ms′])
+#             end
+#         end
+#     elseif action.value == "QUERY"
+#         actionₚ = MemoryAction(last(state.action_list).value)
+#         stateₚ = MemoryState(state.state,
+#                              state.action_list[1:length(state.action_list)-1])
+#         sₚ = index(stateₚ, ℳ.S)
+#         aₚ = index(actionₚ, ℳ.A)
+#         for s′ = 1:length(M.S)
+#             T[s′] = recurse_transition(ℳ, sₚ, aₚ, s′)
+#         end
+#     elseif length(state.action_list) == ℳ.δ
+#         T[length(ℳ.S)] = 1.
+#     else
+#         s, a = index(state, S), index(action, A)
+#         action_list′ = copy(state.action_list)
+#         push!(action_list′, DomainAction(action.value))
+#         mstate′ = MemoryState(state.state, action_list′)
+#         ## TODO: Below, we assume a fixed value of gaining observability from a
+#         ##       memory state. This part should be changed to be based on eta
+#         ##       of belief state of the memory state.
+#         T[index(mstate′, S)] = .75
+#         for s′ = 1:length(M.S)
+#             T[s′] = 0.25recurse_transition(ℳ, s, a, s′)
+#         end
+#     end
+#     return T
+# end
+
+function generate_reward(ℳ::SOMDP, s::Int, a::Int)
     M, S, A = ℳ.M, ℳ.S, ℳ.A
+    state, action = S[s], A[a]
     if state.state.x == -1
         return -10
-    end
-    if action.value == "QUERY"
-        return -3.  ## TODO: Adjust this cost somehow??
+    elseif action.value == "QUERY"
+        return (-2 * sum(state.state.𝒫))
     elseif length(state.action_list) == 0
-        return M.R[index(state, S)][index(action, A)]
+        return M.R[s][a]
     else
-        a = index(action, A)
-        actionₚ = MemoryAction(last(state.action_list).value)
-        stateₚ = MemoryState(state.state,
-                             state.action_list[1:length(state.action_list)-1])
-        sum = 0
-        sₚ = index(stateₚ, ℳ.S)
-        aₚ = index(actionₚ, ℳ.A)
-        for bs = 1:length(M.S)
-            sum += M.R[bs][a] * recurse_transition(ℳ, sₚ, aₚ, bs)
+        r = 0.0
+        for (bs, b) in ℳ.T[s][length(A)]
+            r += b * ℳ.M.R[bs][a]
         end
-        return sum
+        return r
     end
 end
 
-function generate_heuristic(ℳ::SOMDP,
-                             V::Vector{Float64},
-                         state::MemoryState,
-                        action::MemoryAction)
+function generate_heuristic(ℳ::SOMDP, V::Vector{Float64}, s::Int, a::Int)
     M, S, A = ℳ.M, ℳ.S, ℳ.A
+    state, action = S[s], A[a]
     if state.state.x == -1
         return 0.
     end
     if length(state.action_list) == 0
-        return V[index(state, S)]
+        return V[s]
     else
-        actionₚ = MemoryAction(last(state.action_list).value)
-        stateₚ = MemoryState(state.state,
-                            state.action_list[1:length(state.action_list)-1])
         h = 0.0
-        for bs = 1:length(M.S)
-            v = V[bs]
-            if v ≠ 0.0
-                h += v * recurse_transition(ℳ, stateₚ, actionₚ, S[bs])
-            end
+        for (bs, b) in ℳ.T[s][length(A)]
+            h += b * V[bs]
         end
         return h
-        # return (sum(V[bs] * recurse_transition(ℳ, stateₚ, actionₚ, S[bs])
-        #                                          for bs = 1:length(M.S)))
     end
     return 0.
 end
@@ -241,24 +368,24 @@ function generate_successor(ℳ::SOMDP,
                         action::MemoryAction)::MemoryState
     thresh = rand()
     p = 0.
-    T = ℳ.T(ℳ, state, action)
-    for (s′, state′) ∈ enumerate(ℳ.S)
-        p += T[s′]
+    T = ℳ.T[ℳ.Sindex[state]][ℳ.Aindex[action]]
+    for (s′, prob) ∈ T
+        p += prob
         if p >= thresh
-            return state′
+            return ℳ.S[s′]
         end
     end
 end
 
 
 function generate_successor(ℳ::SOMDP,
-                         state::MemoryState,
-                        action::MemoryAction)::Integer
+                             s::Integer,
+                             a::Integer)::Integer
     thresh = rand()
     p = 0.
-    T = ℳ.T(ℳ, state, action)
-    for (s′, state′) ∈ enumerate(ℳ.S)
-        p += T[s′]
+    T = ℳ.T[s][a]
+    for (s′, prob) ∈ T
+        p += prob
         if p >= thresh
             return s′
         end
@@ -277,8 +404,8 @@ function simulate(ℳ::SOMDP,
                 cum_cost += 3
                 state = MemoryState(true_state, Vector{CampusAction}())
             else
-                s = index(state, S)
-                true_s = index(true_state, M.S)
+                s = ℳ.Sindex[state]
+                true_s = ℳ.Sindex[true_state]index(true_state, M.S)
                 a = 𝒱.π[true_s]
                 action = M.A[a]
                 memory_action = MemoryAction(action.value)
@@ -295,19 +422,25 @@ function simulate(ℳ::SOMDP,
     println("Average cost to goal: $cum_cost")
 end
 
-function simulate(ℳ::SOMDP, 𝒮::Union{LAOStarSolver,FLARESSolver}, 𝒱::ValueIterationSolver)
+function simulate(ℳ::SOMDP,
+                   𝒱::ValueIterationSolver,
+                   𝒮::Union{LAOStarSolver,FLARESSolver},
+                   m::Int,
+                   v::Bool)
     M, S, A, R = ℳ.M, ℳ.S, ℳ.A, ℳ.R
     r = Vector{Float64}()
     # println("Expected cost to goal: $(ℒ.V[index(state, S)])")
-    for i ∈ 1:10
+    for i ∈ 1:m
         state, true_state = ℳ.s₀, M.s₀
         episode_reward = 0.0
         while true
             s = index(state, S)
             a = 𝒮.π[s]
             action = A[a]
-            println("Taking action $action in memory state $state
-                                           in true state $true_state.")
+            if v
+                println("Taking action $action in memory state $state
+                                               in true state $true_state.")
+            end
             if action.value == "QUERY"
                 state = MemoryState(true_state, Vector{DomainAction}())
                 episode_reward -= 3
@@ -323,8 +456,10 @@ function simulate(ℳ::SOMDP, 𝒮::Union{LAOStarSolver,FLARESSolver}, 𝒱::Val
             end
 
             if terminal(state) || terminal(true_state)
-                println("Terminating in state $state and
-                                   true state $true_state.")
+                if v
+                    println("Terminating in state $state and
+                                       true state $true_state.")
+                end
                 break
             end
         end
@@ -383,9 +518,11 @@ function build_model(M::MDP,
                      δ::Int)
     S, s₀ = generate_states(M, δ)
     A = generate_actions(M)
-    τ = Dict{Int, Dict{Int, Dict{Int, Float64}}}()
-    ℳ = SOMDP(M, S, A, generate_transitions, generate_reward, s₀,
-                   τ, δ, generate_heuristic)
+    T = Dict{Int, Dict{Int, Vector{Tuple{Int, Float64}}}}()
+    ℳ = SOMDP(M, S, A, T, generate_reward, s₀, δ, generate_heuristic)
+    generate_transitions(ℳ)
+    println("Checking transition validity")
+    check_transition_validity(ℳ)
     return ℳ
 end
 
@@ -428,46 +565,95 @@ function solve_model(ℳ, 𝒱, solver)
     end
 end
 
-function main(solver::String,
-                 sim::Bool,
-                   δ::Int)
-    domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_1.txt")
-
-    println("Starting...")
-    M = build_model(domain_map_file)
-    𝒱 = solve_model(M)
-
-    ℳ = @time build_model(M, δ)
-    println("Total states: $(length(ℳ.S))")
-
+function solve(ℳ, 𝒱, solver::String)
     if solver == "laostar"
-        ℒ = solve_model(ℳ, 𝒱, solver)
-        if sim
-            println("Simulating...")
-            simulate(ℳ, ℒ, 𝒱)
-        end
+        return solve_model(ℳ, 𝒱, solver)
     elseif solver == "uct"
-        𝒰 = solve_model(ℳ, 𝒱, solver)
-        if sim
-            println("Simulating...")
-            simulate(ℳ, 𝒱, 𝒰)
-        end
+        return solve_model(ℳ, 𝒱, solver)
     elseif solver == "mcts"
-        π, a = solve_model(ℳ, 𝒱, solver)
-        # expected_cost = π.Q[(ℳ.s₀, a)]
-        if sim
-            println("Simulating...")
-            simulate(ℳ, 𝒱, π)
-        end
+        return solve_model(ℳ, 𝒱, solver)
     elseif solver == "flares"
-        ℱ = solve_model(ℳ, 𝒱, solver)
-        if sim
-            println("Simulating")
-            simulate(ℳ, ℱ, 𝒱)
-        end
+        return solve_model(ℳ, 𝒱, solver)
     else
         println("Error.")
     end
 end
 
-# main("laostar", false, 1)
+# This is for Connor's benefit running in IDE
+
+function reachability(ℳ::SOMDP, δ::Int, 𝒮::LAOStarSolver)
+    S, state₀, A, T = ℳ.S, ℳ.s₀, ℳ.A, ℳ.T
+    s = index(state₀, S)
+    π = 𝒮.π
+
+    reachable = Set{Int}()
+    reachable_max_depth = Set{Int}()
+    visited = Vector{Int}()
+    push!(visited, s)
+    while !isempty(visited)
+        s = pop!(visited)
+        if s ∈ reachable
+            continue
+        end
+        push!(reachable, s)
+        if length(S[s].action_list) == δ
+            push!(reachable_max_depth, s)
+        end
+        if terminal(S[s])
+            continue
+        end
+        a = π[s]
+        for (s′, p) in T[s][a]
+            push!(visited, s′)
+        end
+    end
+    count = 0
+    for (s, state) in enumerate(S)
+        if length(state.action_list) == δ
+            count += 1
+        end
+    end
+
+    println("Reachable max depth states under optimal policy: $(length(reachable_max_depth))")
+    # println("Percent of total max depth states reachable under optimal policy: $(length(reachable_max_depth)/(length(S) * (length(A)^δ)))")
+    println("Percent of total max depth states reachable under optimal policy: $(length(reachable_max_depth)/count)")
+end
+
+function run_somdp()
+    ## PARAMS
+    MAP_PATH = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
+    SOLVER = "laostar"
+    SIM = false
+    SIM_COUNT = 1
+    VERBOSE = true
+    DEPTH = 4
+
+    ## EXPERIMENTS
+    REACHABILITY = false
+
+    # PEOPLE_LOCATIONS = [(2,2), (4,7), (3,8)] # COLLAPSE 1
+    PEOPLE_LOCATIONS = [(7, 19), (10, 12), (6, 2)] # COLLAPSE 2
+
+
+    ## MAIN SCRIPT
+    println("Building MDP...")
+    M = build_model(MAP_PATH, PEOPLE_LOCATIONS)
+    println("Solving MDP...")
+    𝒱 = solve_model(M)
+    println("Building SOMDP...")
+    ℳ = @time build_model(M, DEPTH)
+    println("Total state: $(length(ℳ.S))")
+    println("Solving SOMDP...")
+    solver = @time solve(ℳ, 𝒱, SOLVER)
+
+    if SIM
+        println("Simulating...")
+        simulate(ℳ, 𝒱, solver, SIM_COUNT, VERBOSE)
+    end
+
+    if REACHABILITY
+        reachability(ℳ, DEPTH, solver)
+    end
+end
+
+# run_somdp()

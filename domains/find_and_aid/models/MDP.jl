@@ -22,12 +22,31 @@ struct DomainState
     𝒫::Vector{Integer}
 end
 
+function Base.hash(a::DomainState, h::UInt)
+    h = hash(a.x, h)
+    h = hash(a.y, h)
+    h = hash(a.θ, h)
+    h = hash(a.𝓁, h)
+    for p ∈ a.𝒫
+        h = hash(p, h)
+    end
+    return h
+end
+
 function ==(a::DomainState, b::DomainState)
-    return a.x == b.x && a.y == b.y && a.θ == b.θ && a.𝓁 == b.𝓁 && a.𝒫 == b.𝒫
+    return isequal(a.x, b.x) && isequal(a.y, b.y) && isequal(a.θ, b.θ) && isequal(a.𝓁, b.𝓁) && isequal(a.𝒫, b.𝒫)
 end
 
 struct DomainAction
     value::Union{String,Char}
+end
+
+function Base.hash(a::DomainAction, h::UInt)
+    return hash(a.value, h)
+end
+
+function ==(a::DomainAction, b::DomainAction)
+    return isequal(a.value, b.value)
 end
 
 struct MDP
@@ -38,7 +57,8 @@ struct MDP
     s₀
 end
 
-function generate_people_smoke_level_vector(grid::Vector{Vector{Any}})
+function generate_people_smoke_level_vector(grid::Vector{Vector{Any}},
+                                people_locations::Vector{Tuple{Int, Int}})
     𝒫 = Vector{Int}()
     for loc in people_locations
         push!(𝒫, parse(Int, grid[loc[1]][loc[2]]))
@@ -61,10 +81,11 @@ end
 ## TODO: There is a bug for when people *start* out in '0' smoke level locations
 ##       We can probably ignore it becuase if they have 0 smoke level we
 ##       don't do anything with them anyways. Still be careful...
-function generate_states(grid::Vector{Vector{Any}})
+function generate_states(grid::Vector{Vector{Any}},
+             people_locations::Vector{Tuple{Int,Int}})
     S = Vector{DomainState}()
     s₀ = -1
-    𝒫 = generate_people_smoke_level_vector(grid)
+    𝒫 = generate_people_smoke_level_vector(grid, people_locations)
     num_people = length(people_locations)
 
     for (i, row) in enumerate(grid)
@@ -81,7 +102,10 @@ function generate_states(grid::Vector{Vector{Any}})
                 for mask in collect(combinations(1:num_people))
                     P = copy(𝒫)
                     P[mask] .= 0
-                    push!(S, DomainState(i, j, θ, parse(Int, loc), P))
+                    tmp = DomainState(i, j, θ, parse(Int, loc), P)
+                    if tmp ∉ S
+                        push!(S, tmp) #DomainState(i, j, θ, parse(Int, loc), P))
+                    end
                 end
             end
         end
@@ -192,7 +216,8 @@ function move_distribution(state::DomainState,
 end
 
 function aid_distribution(state::DomainState,
-                          S::Vector{DomainState})
+                              S::Vector{DomainState},
+               people_locations::Vector{Tuple{Int,Int}})
     distr = zeros(length(S))
     loc = (state.x, state.y)
 
@@ -210,7 +235,8 @@ end
 
 function generate_transitions(S::Vector{DomainState},
                               A::Vector{DomainAction},
-                           grid,
+                           grid::Vector{Vector{Any}},
+               people_locations::Vector{Tuple{Int, Int}},
                              s₀::DomainState)
     T = [[[0.0 for (i, _) in enumerate(S)]
                for (j, _) in enumerate(A)]
@@ -229,7 +255,7 @@ function generate_transitions(S::Vector{DomainState},
 
         for (a, action) in enumerate(A)
             if action.value == "aid"
-                T[s][a] = aid_distribution(state, S)
+                T[s][a] = aid_distribution(state, S, people_locations)
             else
                 T[s][a] = move_distribution(state, action, grid, S)
             end
@@ -286,11 +312,11 @@ function check_transition_validity(T, S, A)
     end
 end
 
-function build_model(filepath::String)
+function build_model(filepath::String, people_locations)
     grid = generate_grid(filepath)
-    S, s₀ = generate_states(grid)
+    S, s₀ = generate_states(grid, people_locations)
     A = generate_actions()
-    T = generate_transitions(S, A, grid, s₀)
+    T = generate_transitions(S, A, grid, people_locations, s₀)
     check_transition_validity(T, S, A)
     R = generate_rewards(S, A)
     ℳ = MDP(S, A, T, R, s₀)
@@ -341,50 +367,15 @@ function simulate(ℳ::MDP, 𝒱::ValueIterationSolver)
     println("Average reward: $(r / 1.0)")
 end
 
-# Not sure if there is a better way than manually setting this?
-# people_locations = [(15,9), (4,7), (11,18)]
-people_locations = [(2,2), (4,7), (3,8)]
-
-function run_MDP()
-    domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_1.txt")
-    ℳ = build_model(domain_map_file)
-    𝒱 = @time solve_model(ℳ)
-    simulate(ℳ, 𝒱)
-end
-
-#run_MDP()
-
-
-function generate_map(h::Int, w::Int)
-    seed = abs(rand(Int))
-    MT = MersenneTwister(seed)
-    save_path = joinpath(@__DIR__, "..", "maps", "collapse_$seed.txt")
-    io = open(save_path, "w")
-    for i = 1:h
-        for j = 1:w
-            if i == 1 || i == h
-                write(io, 'X')
-            elseif j == 1 || j == w
-                write(io, 'X')
-            else
-                p = rand(MT)
-                if p < 0.5
-                    write(io, 'X')
-                elseif p < 0.6
-                    write(io, '0')
-                elseif p < 0.8
-                    write(io, '1')
-                elseif p < 0.9
-                    write(io, '2')
-                else
-                    write(io, '3')
-                end
-            end
-            write(io, ' ')
-        end
-        write(io, '\n')
-    end
-    close(io)
-end
-
-# generate_map(20, 20)
+## This is here for Connor
+# function run_MDP()
+#     domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
+#     println("Building Model...")
+#     people_locations = [(7, 19), (10, 12), (6, 2)]
+#     ℳ = build_model(domain_map_file, people_locations)
+#     println("Solving Model...")
+#     𝒱 = @time solve_model(ℳ)
+#     simulate(ℳ, 𝒱)
+# end
+#
+# run_MDP()

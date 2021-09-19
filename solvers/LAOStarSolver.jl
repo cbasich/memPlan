@@ -55,22 +55,17 @@ function lookahead(ℒ::LAOStarSolver,
                    M,
                    s::Integer,
                    a::Integer)
-    S, A, T, R, H, V = M.S, M.A, M.T, M.R, M.H, ℒ.V
-    T = T(M,S[s],A[a])
+    S, A, T, R, H, V = M.S, M.A, M.T[s][a], M.R, M.H, ℒ.V
 
     q = 0.
-    for i=1:length(S)
-        if T[i] == 0
-            continue
-        end
-        if i ∈ keys(ℒ.π)
-            q += T[i] * V[i]
+    for (s′, p) in T
+        if haskey(ℒ.π, s′)
+            q += p * V[s′]
         else
-            # continue
-            q += T[i] * H(M, 𝒱.V, S[s], A[a])
+            q += p * H(M, 𝒱.V, s, a)
         end
     end
-    return q + R(M,S[s],A[a])
+    return q + R(M,s,a)
 end
 
 function backup(ℒ::LAOStarSolver,
@@ -114,11 +109,8 @@ function expand(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M,
         return 1
     else
         a = ℒ.π[s]
-        transitions = M.T(M, M.S[s], M.A[a])
-        for s′ = 1:length(M.S)
-            if transitions[s′] > 0.0
-                count += expand(ℒ, 𝒱, M, s′, visited)
-            end
+        for (s′, p) in M.T[s][a]
+            count += expand(ℒ, 𝒱, M, s′, visited)
         end
     end
     return count
@@ -175,12 +167,8 @@ function test_convergence(ℒ::LAOStarSolver,
     a = -1
     if s ∈ keys(ℒ.π)
         a = ℒ.π[s]
-        # println("a starting as $a for state $s")
-        transitions = M.T(M, M.S[s], M.A[a])
-        for s′ = 1:length(M.S)
-            if transitions[s′] > 0.0
-                error = max(error, test_convergence(ℒ, 𝒱, M, s′, visited))
-            end
+        for (s′, p ) in M.T[s][a]
+            error = max(error, test_convergence(ℒ, 𝒱, M, s′, visited))
         end
     else
         return ℒ.dead_end_cost + 1
@@ -190,7 +178,7 @@ function test_convergence(ℒ::LAOStarSolver,
     # if error < .01
     #     println("a ending as $(M.A[ℒ.π[s]]) for state $(M.S[s]) with error $error.")
     # end
-    if (a == -1 && s ∉ keys(ℒ.π)) || (s ∈ keys(ℒ.π) && a == ℒ.π[s])
+    if (a == -1 && !haskey(ℒ.π, s)) || (haskey(ℒ.π, s) && a == ℒ.π[s])
         return error
     end
 
