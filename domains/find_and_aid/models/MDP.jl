@@ -270,7 +270,7 @@ end
 
 function generate_rewards(S::Vector{DomainState},
                           A::Vector{DomainAction})
-    R = [[-1.0 for (i, _) in enumerate(A)]
+    R = [[-.1 for (i, _) in enumerate(A)]
                for (j, _) in enumerate(S)]
 
     for (s, state) in enumerate(S)
@@ -342,40 +342,43 @@ function generate_successor(ℳ::MDP, s::Int, a::Int)
             return state′
         end
     end
-    println("Getting here?    $p     $(sum(ℳ.T[s][a]))")
-    println("state $s and action $a")
 end
 
 function simulate(ℳ::MDP, 𝒱::ValueIterationSolver)
     S, A, R = ℳ.S, ℳ.A, ℳ.R
-    r = 0.
-    for i=1:1
+    rewards = Vector{Float64}()
+    for i=1:100
+        r = 0.0
         state = ℳ.s₀
-        println("Expected reward: $(𝒱.V[index(state, S)])")
+        # println("Expected reward: $(𝒱.V[index(state, S)])")
         while true
             s = index(state, S)
             a = 𝒱.π[s]
             r += R[s][a]
-            println("Taking action $(A[a]) in state $state.")
+            # println("Taking action $(A[a]) in state $state.")
             state = generate_successor(ℳ, s, a)
+            # t += 1
             if terminal(state)
                 break
             end
         end
+        push!(rewards, r)
         # println("Reached the goal with total cost $cost.")
     end
-    println("Average reward: $(r / 1.0)")
+    println("Average reward: $(mean(rewards)) ⨦ $(std(rewards))")
 end
 
-## This is here for Connor
-# function run_MDP()
-#     domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
-#     println("Building Model...")
-#     people_locations = [(7, 19), (10, 12), (6, 2)]
-#     ℳ = build_model(domain_map_file, people_locations)
-#     println("Solving Model...")
-#     𝒱 = @time solve_model(ℳ)
-#     simulate(ℳ, 𝒱)
-# end
-#
-# run_MDP()
+# This is here for Connor
+function run_MDP()
+    domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
+    println("Building Model...")
+    people_locations = [(7, 19), (10, 12), (6, 2)]
+    # people_locations = [(2,2), (4,7), (3,8)]
+    ℳ = build_model(domain_map_file, people_locations)
+    println(" ")
+    println("Solving Model...")
+    𝒱 = @time solve_model(ℳ)
+    simulate(ℳ, 𝒱)
+end
+
+run_MDP()
