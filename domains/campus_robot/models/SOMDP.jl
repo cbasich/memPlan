@@ -72,7 +72,7 @@ function generate_states(M::MDP, δ::Integer)
 end
 
 function terminal(ℳ::SOMDP, state::MemoryState)
-    return terminal(state.state)
+    return terminal(state.state, ℳ.M.g)
 end
 
 function generate_actions(M::MDP)
@@ -385,7 +385,7 @@ function simulate(ℳ::SOMDP,
                     true_state = generate_successor(M, true_s, a)
                 end
             end
-            if terminal(state) || terminal(true_state)
+            if terminal(state) || terminal(true_state, ℳ.M.g)
                 println("Terminating in state $state and
                                    true state $true_state.")
                 break
@@ -467,17 +467,19 @@ end
 
 function run_somdp()
     ## PARAMS
-    MAP_PATH = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
+    MAP_PATH = joinpath(@__DIR__, "..", "maps", "one_building.txt")
     SOLVER = "laostar"
     SIM = false
     SIM_COUNT = 1
     VERBOSE = false
     DEPTH = 2
+    INIT = 'a'
+    GOAL = 'b'
 
 
     ## MAIN SCRIPT
     println("Building MDP...")
-    M = build_model(MAP_PATH)
+    M = build_model(MAP_PATH, INIT, GOAL)
     println("Solving MDP...")
     𝒱 = solve_model(M)
     println("Building SOMDP...")
