@@ -190,8 +190,8 @@ function move_distribution(state::DomainState,
 
     if grid[xp][yp] == 'X'
         outside = DomainState(0, 0, '↑', 0, state.𝒫)
-        distr[index(outside, S)] = 0.8
-        distr[index(state, S)] = 0.2
+        distr[index(outside, S)] = 0.16
+        distr[index(state, S)] = 0.84
         return distr
     end
     # xpr, ypr = pos_shift(slip_right(action.value))
@@ -274,14 +274,17 @@ function generate_transitions(S::Vector{DomainState},
 end
 
 function generate_rewards(S::Vector{DomainState},
-                          A::Vector{DomainAction})
+                          A::Vector{DomainAction},
+                     state₀::DomainState)
     R = [[-.1 for (i, _) in enumerate(A)]
                for (j, _) in enumerate(S)]
 
     for (s, state) in enumerate(S)
         R[s] *= sum(state.𝒫)
         if state.x == 0
-            R[s] .-= 2.0 * ceil(sqrt(length(S)))
+            manhattan = abs(state.x - state₀.x) + abs(state.y - state₀.y)
+            R[s] *= (manhattan * sum(state.𝒫))
+            # R[s] .-= 2.0 * ceil(sqrt(length(S)))
         end
     end
     return R
@@ -332,7 +335,7 @@ function build_model(filepath::String, people_locations)
     A = generate_actions()
     T = generate_transitions(S, A, grid, people_locations, s₀)
     check_transition_validity(T, S, A)
-    R = generate_rewards(S, A)
+    R = generate_rewards(S, A, s₀)
     ℳ = MDP(S, A, T, R, s₀)
     return ℳ
 end
@@ -374,15 +377,15 @@ end
 function simulate(ℳ::MDP, 𝒱::ValueIterationSolver)
     S, A, R = ℳ.S, ℳ.A, ℳ.R
     rewards = Vector{Float64}()
-    for i=1:100
+    for i=1:1
         r = 0.0
         state = ℳ.s₀
-        # println("Expected reward: $(𝒱.V[index(state, S)])")
+        println("Expected reward: $(𝒱.V[index(state, S)])")
         while true
             s = index(state, S)
             a = 𝒱.π[s]
             r += R[s][a]
-            # println("Taking action $(A[a]) in state $state.")
+            println("Taking action $(A[a]) in state $state with reward $(R[s][a])")
             state = generate_successor(ℳ, s, a)
             # t += 1
             if terminal(state)
@@ -396,16 +399,16 @@ function simulate(ℳ::MDP, 𝒱::ValueIterationSolver)
 end
 
 # This is here for Connor
-# function run_MDP()
-#     domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
-#     println("Building Model...")
-#     people_locations = [(7, 19), (10, 12), (6, 2)]
-#     # people_locations = [(2,2), (4,7), (3,8)]
-#     ℳ = build_model(domain_map_file, people_locations)
-#     println(" ")
-#     println("Solving Model...")
-#     𝒱 = @time solve_model(ℳ)
-#     simulate(ℳ, 𝒱)
-# end
-#
-# run_MDP()
+function run_MDP()
+    domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
+    println("Building Model...")
+    people_locations = [(7, 19), (10, 12), (6, 2)]
+    # people_locations = [(2,2), (4,7), (3,8)]
+    ℳ = build_model(domain_map_file, people_locations)
+    println(" ")
+    println("Solving Model...")
+    𝒱 = @time solve_model(ℳ)
+    simulate(ℳ, 𝒱)
+end
+
+run_MDP()
