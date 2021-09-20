@@ -156,7 +156,7 @@ function check_transition_validity(ℳ::SOMDP)
             for (s′, p) in T[s][a]
                 mass += p
             end
-            if round(mass; digits=5) != 1.0
+            if round(mass; digits=4) != 1.0
                 println("Transition error at state $state and action $action.")
                 println("State index: $s      Action index: $a")
                 println("Total probability mass of $mass.")
@@ -333,7 +333,7 @@ function generate_reward(ℳ::SOMDP, s::Int, a::Int)
     if state.state.x == -1
         return -10
     elseif action.value == "QUERY"
-        return (-2 * sum(state.state.𝒫))
+        return (-0.2 * sum(state.state.𝒫))
     elseif length(state.action_list) == 0
         return M.R[s][a]
     else
@@ -443,7 +443,7 @@ function simulate(ℳ::SOMDP,
             end
             if action.value == "QUERY"
                 state = MemoryState(true_state, Vector{DomainAction}())
-                episode_reward -= 3
+                episode_reward += -0.2 * sum(state.state.𝒫)
             else
                 true_s = index(true_state, M.S)
                 episode_reward += M.R[true_s][a]

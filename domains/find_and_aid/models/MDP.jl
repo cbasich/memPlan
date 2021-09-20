@@ -1,6 +1,5 @@
 using Combinatorics
 using Statistics
-using AutoHashEquals
 
 import Base.==
 
@@ -17,7 +16,7 @@ function index(element, collection)
     return -1
 end
 
-@auto_hash_equals struct DomainState
+struct DomainState
     x::Integer
     y::Integer
     θ::Char
@@ -40,7 +39,7 @@ function ==(a::DomainState, b::DomainState)
     return isequal(a.x, b.x) && isequal(a.y, b.y) && isequal(a.θ, b.θ) && isequal(a.𝓁, b.𝓁) && isequal(a.𝒫, b.𝒫)
 end
 
-@auto_hash_equals struct DomainAction
+struct DomainAction
     value::Union{String,Char}
 end
 
@@ -411,4 +410,4 @@ function run_MDP()
     simulate(ℳ, 𝒱)
 end
 
-run_MDP()
+#run_MDP()

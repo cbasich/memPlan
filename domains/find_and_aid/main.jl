@@ -10,24 +10,27 @@ function main()
     ## PARAMS
     SOLVER = "laostar"
     SIM = true 
-    SIM_COUNT = 1
+    SIM_COUNT = 100
     VERBOSE = false
-    DEPTH = 1
+    DEPTH = 2
 
-    MAP_PATH = joinpath(@__DIR__, "maps", "collapse_1.txt")
-    PEOPLE_LOCATIONS = [(2,2), (4,7), (3,8)] # COLLAPSE 1
-    # PEOPLE_LOCATIONS = [(7, 19), (10, 12), (6, 2)] # COLLAPSE 2
+#    MAP_PATH = joinpath(@__DIR__, "maps", "collapse_1.txt")
+    MAP_PATH = joinpath(@__DIR__, "maps", "collapse_2.txt")
+#    PEOPLE_LOCATIONS = [(2,2), (4,7), (3,8)] # COLLAPSE 1
+    PEOPLE_LOCATIONS = [(7, 19), (10, 12), (6, 2)] # COLLAPSE 2
 
 
     ## MAIN SCRIPT
-    println("Building MDP...")
-    M = build_model(MAP_PATH, PEOPLE_LOCATIONS)
-    println("Solving MDP...")
-    𝒱 = solve_model(M)
-    println("Building SOMDP...")
-    ℳ = build_model(M, DEPTH)
-    println("Solving SOMDP...")
-    solver = @time solve(ℳ, 𝒱, SOLVER)
+    @time begin
+        println("Building MDP...")
+        M = build_model(MAP_PATH, PEOPLE_LOCATIONS)
+        println("Solving MDP...")
+        @time 𝒱 = solve_model(M)
+        @time println("Building SOMDP...")
+        ℳ = build_model(M, DEPTH)
+        println("Solving SOMDP...")
+        solver = @time solve(ℳ, 𝒱, SOLVER)
+    end
 
     if SIM
         println("Simulating...")
