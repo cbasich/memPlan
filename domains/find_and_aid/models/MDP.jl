@@ -369,16 +369,16 @@ function simulate(ℳ::MDP, 𝒱::ValueIterationSolver)
 end
 
 # This is here for Connor
-function run_MDP()
-    domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
-    println("Building Model...")
-    people_locations = [(7, 19), (10, 12), (6, 2)]
-    # people_locations = [(2,2), (4,7), (3,8)]
-    ℳ = build_model(domain_map_file, people_locations)
-    println(" ")
-    println("Solving Model...")
-    𝒱 = @time solve_model(ℳ)
-    simulate(ℳ, 𝒱)
-end
-
-run_MDP()
+# function run_MDP()
+#     domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
+#     println("Building Model...")
+#     people_locations = [(7, 19), (10, 12), (6, 2)]
+#     # people_locations = [(2,2), (4,7), (3,8)]
+#     ℳ = build_model(domain_map_file, people_locations)
+#     println(" ")
+#     println("Solving Model...")
+#     𝒱 = @time solve_model(ℳ)
+#     simulate(ℳ, 𝒱)
+# end
+#
+# run_MDP()
