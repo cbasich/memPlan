@@ -175,9 +175,6 @@ function test_convergence(ℒ::LAOStarSolver,
     end
 
     error = max(error, bellman_update(ℒ, 𝒱, M, s))
-    # if error < .01
-    #     println("a ending as $(M.A[ℒ.π[s]]) for state $(M.S[s]) with error $error.")
-    # end
     if (a == -1 && !haskey(ℒ.π, s)) || (haskey(ℒ.π, s) && a == ℒ.π[s])
         return error
     end
