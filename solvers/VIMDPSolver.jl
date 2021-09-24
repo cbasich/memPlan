@@ -13,7 +13,7 @@ end
 
 function lookahead(𝒱::ValueIterationSolver, M, s::Integer, a::Integer)
     S, T, R, V = M.S, M.T, M.R, 𝒱.V
-    return R[s][a] + sum(T[s][a][s′] * V[s′] for s′=1:length(S))
+    return R[s][a] + .99*sum(T[s][a][s′] * V[s′] for s′=1:length(S))
 end
 
 function backup(𝒱::ValueIterationSolver, M, s::Integer)
@@ -33,9 +33,11 @@ function solve(𝒱::ValueIterationSolver, M)
         for s = 1:length(M.S)
             a, q = backup(𝒱, M, s)
             residual = max(residual, abs(𝒱.V[s] - q))
+            # println(residual)
             𝒱.V[s] = q
             𝒱.π[s] = a
         end
+        # println(residual)
         if residual < 𝒱.eps
             break
         end

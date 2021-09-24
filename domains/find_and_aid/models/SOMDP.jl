@@ -115,7 +115,7 @@ function generate_states(M::MDP, δ::Integer)
     return S, S[s₀]
 end
 
-function terminal(state::MemoryState)
+function terminal(ℳ::SOMDP, state::MemoryState)
     return terminal(state.state)
 end
 
@@ -330,10 +330,8 @@ end
 function generate_reward(ℳ::SOMDP, s::Int, a::Int)
     M, S, A = ℳ.M, ℳ.S, ℳ.A
     state, action = S[s], A[a]
-    if state.state.x == -1
-        return -10
-    elseif action.value == "QUERY"
-        return (-2 * sum(state.state.𝒫))
+    if action.value == "QUERY"
+        return (-.2 * sum(state.state.𝒫))
     elseif length(state.action_list) == 0
         return M.R[s][a]
     else
@@ -348,9 +346,6 @@ end
 function generate_heuristic(ℳ::SOMDP, V::Vector{Float64}, s::Int, a::Int)
     M, S, A = ℳ.M, ℳ.S, ℳ.A
     state, action = S[s], A[a]
-    if state.state.x == -1
-        return 0.
-    end
     if length(state.action_list) == 0
         return V[s]
     else
@@ -442,8 +437,9 @@ function simulate(ℳ::SOMDP,
                                                in true state $true_state.")
             end
             if action.value == "QUERY"
+                episode_reward += R[s][a]
                 state = MemoryState(true_state, Vector{DomainAction}())
-                episode_reward -= 3
+                # episode_reward -= \scr
             else
                 true_s = index(true_state, M.S)
                 episode_reward += M.R[true_s][a]
@@ -623,10 +619,10 @@ function run_somdp()
     ## PARAMS
     MAP_PATH = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
     SOLVER = "laostar"
-    SIM = false
-    SIM_COUNT = 1
-    VERBOSE = true
-    DEPTH = 4
+    SIM = true
+    SIM_COUNT = 100
+    VERBOSE = false
+    DEPTH = 1
 
     ## EXPERIMENTS
     REACHABILITY = false
@@ -656,4 +652,4 @@ function run_somdp()
     end
 end
 
-# run_somdp()
+run_somdp()

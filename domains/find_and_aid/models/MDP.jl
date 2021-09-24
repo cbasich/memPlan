@@ -278,7 +278,7 @@ function generate_rewards(S::Vector{DomainState},
         R[s] *= sum(state.𝒫)
         if state.x == 0
             manhattan = abs(state.x - state₀.x) + abs(state.y - state₀.y)
-            R[s] *= (manhattan * sum(state.𝒫))
+            R[s] *= (2 * manhattan * sum(state.𝒫))
             # R[s] .-= 2.0 * ceil(sqrt(length(S)))
         end
     end

@@ -99,7 +99,7 @@ function expand(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M,
         return 0
     end
     push!(visited, s)
-    if terminal(M.S[s])
+    if terminal(ℳ, M.S[s])
         return 0
     end
 
