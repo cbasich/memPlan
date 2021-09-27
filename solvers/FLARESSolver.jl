@@ -33,8 +33,8 @@ function trial(ℱ, 𝒱, M, s::Integer)
         end
 
         greedy_action = get_greedy_action(ℱ, 𝒱, M, current_state)
-        accumulated_cost += M.R(M, M.S[current_state], M.A[greedy_action])
-        current_state::Integer = generate_successor(M, M.S[current_state], M.A[greedy_action])
+        accumulated_cost += M.R(M, current_state, greedy_action)
+        current_state::Integer = generate_successor(M, current_state, greedy_action)
     end
     while (!isempty(visited))
         current_state = pop!(visited)
@@ -109,22 +109,19 @@ function check_solved(ℱ, 𝒱, M, s::Integer)
         if (residual(ℱ, 𝒱, M, current_state) > ℱ.ϵ)
             rv = false
         end
-        successor_probs = M.T(M, M.S[current_state], M.A[a])
-        for sp ∈ 1:length(M.S)
-            prob = successor_probs[sp]
-            if prob > 0
-                if !labeled_solved(ℱ, sp) && sp ∉ closed_states
-                    new_depth = compute_new_depth(ℱ, prob, depth)
-                    push!(open, sp => new_depth)
-                elseif sp ∈ ℱ.dsolved && sp ∉ ℱ.solved
-                    subgraph_within_search_horizon = false
-                end
+        successor_probs = M.T[s][a]
+        for (sp, prob) in successor_probs
+            if !labeled_solved(ℱ, sp) && sp ∉ closed_states
+                new_depth = compute_new_depth(ℱ, prob, depth)
+                push!(open, sp => new_depth)
+            elseif sp ∈ ℱ.dsolved && sp ∉ ℱ.solved
+                subgraph_within_search_horizon = false
             end
         end
     end
 
     if rv
-        while !isempty(closed) 
+        while !isempty(closed)
             pp = pop!(closed)
             _ = pop!(closed_states)
             if subgraph_within_search_horizon
@@ -160,22 +157,17 @@ function lookahead(ℱ::FLARESSolver,
                    M,
                    s::Integer,
                    a::Integer)
-    S, A, T, R, H, V = M.S, M.A, M.T, M.R, M.H, ℱ.V
-    T = T(M,S[s],A[a])
+    S, A, T, R, H, V = M.S, M.A, M.T[s][a], M.R, M.H, ℱ.V
 
     q = 0.
-    for i=1:length(S)
-        if T[i] == 0
-            continue
-        end
-        if haskey(ℱ.π, i)
-            q += T[i] * V[i]
-        else
-            # continue
-            q += T[i] * H(M, 𝒱.V, S[s], A[a])
-        end
+    for (s′, p) in T
+       if haskey(ℱ.π, s′)
+           q += p * V[s′]
+       else
+           q += p * H(M, 𝒱.V, s, a)
+       end
     end
-    return q + R(M,S[s],A[a])
+    return q + R(M,s,a)
 end
 
 function backup(ℱ::FLARESSolver,
