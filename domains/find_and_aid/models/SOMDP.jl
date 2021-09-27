@@ -1,6 +1,7 @@
 using Combinatorics
 using Statistics
 using Random
+using TimerOutputs
 
 import Base.==
 
@@ -110,12 +111,16 @@ function generate_states(M::MDP, δ::Integer)
             end
         end
     end
-    push!(S, MemoryState(DomainState(-1, -1, '↑', -1, Integer[-1,-1,-1]),
-                         DomainAction[DomainAction("aid")]))
+    # push!(S, MemoryState(DomainState(-1, -1, '↑', -1, Integer[-1,-1,-1]),
+    #                      DomainAction[DomainAction("aid")]))
     return S, S[s₀]
 end
 
 function terminal(ℳ::SOMDP, state::MemoryState)
+    return terminal(state)
+end
+
+function terminal(state::MemoryState)
     return terminal(state.state)
 end
 
@@ -139,8 +144,11 @@ function eta(action::MemoryAction,
 end
 
 function generate_transitions(ℳ::SOMDP)
-    M, S, A, T = ℳ.M, ℳ.S, ℳ.A, ℳ.T
+    M, S, A, T, δ = ℳ.M, ℳ.S, ℳ.A, ℳ.T, ℳ.δ
     for (s, state) in enumerate(S)
+        if length(state.action_list) < δ - 1
+            continue
+        end
         T[s] = Dict{Int, Vector{Pair{Int, Float64}}}()
         for (a, action) in Iterators.reverse(enumerate(A))
             T[s][a] = generate_transitions(ℳ, s, a)
@@ -221,19 +229,6 @@ function generate_transitions(ℳ::SOMDP, s::Int, a::Int)
         for k in keys(tmp)
             push!(T, (k, round(tmp[k]; digits=5)))
         end
-        # for s′ = 1:length(M.S)
-        #     mass = 0.0
-        #     for (bs, b) in ℳ.T[p_s][a]
-        #         for (bs′, b′) in ℳ.T[bs][p_a]
-        #             if bs′ == s′
-        #                 mass += b * ℳ.M.T[bs][p_a][bs′]
-        #             end
-        #         end
-        #     end
-        #     if mass != 0.0
-        #         push!(T, (s′, round(mass; digits=5)))
-        #     end
-        # end
     elseif length(state.action_list) == ℳ.δ
         return [(length(ℳ.S), 1.0)]
     else # Taking non-query action in memory state before depth δ is reached
@@ -260,72 +255,10 @@ function generate_transitions(ℳ::SOMDP, s::Int, a::Int)
             mass += tmp[k]
             push!(T, (k, round(tmp[k]; digits=5)))
         end
-
-        #     for s′ = 1:length(M.S)
-        #         p = M.T[bs][a][s′]
-        #         if p == 0.0
-        #             continue
-        #         end
-        #         p′ = b * p * eta(S[s′])
-        #         mass += p′
-        #         push!(T, (s′, round(p′; digits=5)))
-        #     end
-        # end
         push!(T, (ms′, round(1.0-mass; digits=5)))
     end
     return T
 end
-
-# function generate_transitions(ℳ::SOMDP,
-#                            state::MemoryState,
-#                           action::MemoryAction)
-#     M, S, A = ℳ.M, ℳ.S, ℳ.A
-#     T = zeros(length(S))
-#     if state.state.x == -1
-#         T[length(ℳ.S)] = 1.0
-#         return T
-#     end
-#     if isempty(state.action_list)
-#         s, a = index(state, S), index(action, A)
-#         if action.value == "QUERY"
-#             T[s] = 1.
-#             return T
-#         elseif maximum(M.T[s][a]) == 1.
-#             T[argmax(M.T[s][a])] = 1.
-#             return T
-#         else
-#             ms′ = length(M.S) + length(M.A) * (s-1) + a
-#             T[ms′] = eta(action, ℳ.S[ms′])
-#             for (s′, state′) in enumerate(M.S)
-#                 T[s′] = M.T[s][a][s′] * (1 - T[ms′])
-#             end
-#         end
-#     elseif action.value == "QUERY"
-#         actionₚ = MemoryAction(last(state.action_list).value)
-#         stateₚ = MemoryState(state.state,
-#                              state.action_list[1:length(state.action_list)-1])
-#         sₚ = index(stateₚ, ℳ.S)
-#         aₚ = index(actionₚ, ℳ.A)
-#         for s′ = 1:length(M.S)
-#             T[s′] = recurse_transition(ℳ, sₚ, aₚ, s′)
-#         end
-#     elseif length(state.action_list) == ℳ.δ
-#         T[length(ℳ.S)] = 1.
-#     else
-#         s, a = index(state, S), index(action, A)
-#         action_list′ = copy(state.action_list)
-#         push!(action_list′, DomainAction(action.value))
-#         mstate′ = MemoryState(state.state, action_list′)
-#         ## TODO: Below, we assume a fixed value of gaining observability from a
-#         ##       memory state. This part should be changed to be based on eta
-#         ##       of belief state of the memory state.
-#         T[index(mstate′, S)] = .75
-#         for s′ = 1:length(M.S)
-#             T[s′] = 0.25recurse_transition(ℳ, s, a, s′)
-#         end
-#     end
-#     return T
-# end
 
 function generate_reward(ℳ::SOMDP, s::Int, a::Int)
     M, S, A = ℳ.M, ℳ.S, ℳ.A
@@ -437,9 +370,8 @@ function simulate(ℳ::SOMDP,
                                                in true state $true_state.")
             end
             if action.value == "QUERY"
-                episode_reward += R[s][a]
+                episode_reward += R(ℳ,s,a)
                 state = MemoryState(true_state, Vector{DomainAction}())
-                # episode_reward -= \scr
             else
                 true_s = index(true_state, M.S)
                 episode_reward += M.R[true_s][a]
@@ -464,7 +396,7 @@ function simulate(ℳ::SOMDP,
         #              $(mean(episode_reward)) ⨦ $(std(episode_reward))")
     end
     # println("Reached the goal.")
-    println("Total cumulative reward: $(mean(r)) ⨦ $(std(r))")
+    println("Total cumulative reward: $(round(mean(r);digits=4)) ⨦ $(std(r))")
 end
 #
 function simulate(ℳ::SOMDP,
@@ -479,7 +411,7 @@ function simulate(ℳ::SOMDP,
         while true
             # s = index(state, S)
             # a, _ = solve(ℒ, 𝒱, ℳ, s)
-            action = @time solve(π, state)
+            action = solve(π, state)
             # action = A[a]
             println("Taking action $action in memory state $state
                                            in true state $true_state.")
@@ -522,21 +454,45 @@ function build_model(M::MDP,
     return ℳ
 end
 
+## TODO: Right now this will only build models for one heuristic.
+#        To change -- we would need to make the heuristic "settable" afte
+#        building the SOMDP to avoid recomputing the transition dictionary
+function build_models(M::MDP,
+                 DEPTHS::Vector{Int})
+    MODELS = Vector{SOMDP}()
+    A = generate_actions(M)
+    T = Dict{Int, Dict{Int, Vector{Tuple{Int, Float64}}}}()
+    S, s₀ = generate_states(M, 1)
+    println(">>>> Building SOMDP for depth δ = 1 <<<<")
+    ℳ = SOMDP(M, S, A, T, generate_reward, s₀, 1, generate_heuristic)
+    generate_transitions(ℳ)
+    push!(MODELS, ℳ)
+    tmp_ℳ = ℳ
+    for δ in DEPTHS
+        println(">>>> Building SOMDP for depth δ = $δ <<<<")
+        S, s₀ = generate_states(M, δ)
+        ℳ = SOMDP(M, S, A, copy(tmp_ℳ.T), generate_reward, s₀, δ, generate_heuristic)
+        @time generate_transitions(ℳ)
+        push!(MODELS, ℳ)
+        tmp_ℳ = ℳ
+    end
+    return MODELS
+end
+
 function solve_model(ℳ, 𝒱, solver)
     S, s = ℳ.S, ℳ.s₀
-    println("Solving...")
 
     if solver == "laostar"
         ℒ = LAOStarSolver(100000, 1000., 1.0, .001, Dict{Integer, Integer}(),
             zeros(length(ℳ.S)), zeros(length(ℳ.S)),
             zeros(length(ℳ.S)), zeros(length(ℳ.A)))
-        a, total_expanded = @time solve(ℒ, 𝒱, ℳ, index(s, S))
+        a, total_expanded = solve(ℒ, 𝒱, ℳ, index(s, S))
         println("LAO* expanded $total_expanded nodes.")
         println("Expected reward: $(ℒ.V[index(s,S)])")
         return ℒ
     elseif solver == "uct"
         𝒰 = UCTSolver(zeros(length(ℳ.S)), Set(), 1000, 100, 0)
-        a = @time solve(𝒰, 𝒱, ℳ)
+        a = solve(𝒰, 𝒱, ℳ)
         println("Expected reward: $(𝒰.V[index(s, S)])")
         return 𝒰
     elseif solver == "mcts"
@@ -544,7 +500,7 @@ function solve_model(ℳ, 𝒱, solver)
                                                   for action in ℳ.A)
         U(state, action) = generate_heuristic(ℳ, 𝒱.V, state, action)
         π = MCTSSolver(ℳ, Dict(), Dict(), U, 20, 100, 100.0)
-        a = @time solve(π, s)
+        a = solve(π, s)
         println("Expected reard: $(π.Q[(s, a)])")
         return π, a
     elseif solver == "flares"
@@ -555,7 +511,7 @@ function solve_model(ℳ, 𝒱, solver)
                          Set{Integer}(),
                          Set{Integer}(),
                          zeros(length(ℳ.A)))
-        a, num = @time solve(ℱ, 𝒱, ℳ, index(s, S))
+        a, num = solve(ℱ, 𝒱, ℳ, index(s, S))
         println("Expected reward: $(ℱ.V[index(s, S)])")
         return ℱ
     end
@@ -615,21 +571,63 @@ function reachability(ℳ::SOMDP, δ::Int, 𝒮::LAOStarSolver)
     println("Percent of total max depth states reachable under optimal policy: $(length(reachable_max_depth)/count)")
 end
 
+function run_experiment_script()
+    ## PARAMS
+    MAP_PATH = joinpath(@__DIR__, "..", "maps", "collapse_1.txt")
+    SOLVERS = ["laostar"]
+    HEURISTICS = ["vstar", "null"]
+    SIM_COUNT = 100
+    VERBOSE = false
+    ## delta = 1 is always done by default so don't add here.
+    DEPTHS = [2,3]
+
+    PEOPLE_LOCATIONS = [(2,2), (4,7), (3,8)] # COLLAPSE 1
+    # PEOPLE_LOCATIONS = [(7, 19), (10, 12), (6, 2)] # COLLAPSE 2
+
+    println("Building MDP...")
+    M = build_model(MAP_PATH, PEOPLE_LOCATIONS)
+    println("Solving MDP...")
+    𝒱 = solve_model(M)
+    println("Building SOMDPs...")
+    MODELS = build_models(M, DEPTHS)
+    println("Solving and Evaluating SOMDPS...")
+    logger =
+    to = TimerOutput()
+    solvers = Vector{Union{FLARESSolver, LAOStarSolver}}
+    for solver in SOLVERS
+        for model in MODELS
+            println("\n", ">>>> Solving SOMDP with depth δ = $(model.δ) <<<<")
+            ## TODO: Line below needs to be adjust eventually when we add in
+            #        iterating over the different heuristics.
+            label = solver * " | " * string(model.δ)
+            # println(length(model.S))
+            𝒮 = @timeit to label solve(model, 𝒱, solver)
+
+            println("\n", ">>>> Evaluating with depth = $(model.δ) and solver = $solver <<<<")
+            simulate(model, 𝒱, 𝒮, SIM_COUNT, VERBOSE)
+
+        end
+    end
+
+    show(to, allocations = false)
+end
+
 function run_somdp()
     ## PARAMS
-    MAP_PATH = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
+    MAP_PATH = joinpath(@__DIR__, "..", "maps", "collapse_1.txt")
     SOLVER = "laostar"
     SIM = true
     SIM_COUNT = 100
     VERBOSE = false
     DEPTH = 1
 
-    ## EXPERIMENTS
+    ## EXPERIMENT FlAGS
     REACHABILITY = false
+    DELTA_COMPARISON = false
+    SOLUTION_COMPARISON = false
 
-    # PEOPLE_LOCATIONS = [(2,2), (4,7), (3,8)] # COLLAPSE 1
-    PEOPLE_LOCATIONS = [(7, 19), (10, 12), (6, 2)] # COLLAPSE 2
-
+    PEOPLE_LOCATIONS = [(2,2), (4,7), (3,8)] # COLLAPSE 1
+    # PEOPLE_LOCATIONS = [(7, 19), (10, 12), (6, 2)] # COLLAPSE 2
 
     ## MAIN SCRIPT
     println("Building MDP...")
@@ -647,9 +645,14 @@ function run_somdp()
         simulate(ℳ, 𝒱, solver, SIM_COUNT, VERBOSE)
     end
 
+    ## Experiment Below Here ##
+
     if REACHABILITY
         reachability(ℳ, DEPTH, solver)
     end
+
 end
+
+run_experiment_script()
 
 run_somdp()

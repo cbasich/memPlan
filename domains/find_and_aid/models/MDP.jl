@@ -1,6 +1,6 @@
 using Combinatorics
 using Statistics
-
+using TimerOutputs
 import Base.==
 
 include(joinpath(@__DIR__, "..", "..", "..", "solvers", "VIMDPSolver.jl"))
@@ -384,4 +384,4 @@ function run_MDP()
     simulate(ℳ, 𝒱)
 end
 
-run_MDP()
+# run_MDP()
