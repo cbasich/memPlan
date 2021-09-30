@@ -1,6 +1,6 @@
 using Combinatorics
 using Statistics
-
+using TimerOutputs
 import Base.==
 
 include(joinpath(@__DIR__, "..", "..", "..", "solvers", "VIMDPSolver.jl"))
@@ -21,12 +21,27 @@ struct DomainState
     o::Char
 end
 
+function Base.hash(a::DomainState, h::UInt)
+    h = hash(a.x, h)
+    h = hash(a.y, h)
+    h = hash(a.θ, h)
+    h = hash(a.o, h)
+end
+
 function ==(a::DomainState, b::DomainState)
     return a.x == b.x && a.y == b.y && a.θ == b.θ && a.o == b.o
 end
 
 struct DomainAction
     value::Union{String,Char}
+end
+
+function Base.hash(a::DomainAction, h::UInt)
+    return hash(a.value, h)
+end
+
+function ==(a::DomainAction, b::DomainAction)
+    return isequal(a.value, b.value)
 end
 
 struct MDP
@@ -406,8 +421,10 @@ function run_MDP()
     println("Building Model...")
     ℳ = build_model(domain_map_file, 'a', 'b')
     println("Solving Model...")
-    𝒱 = @time solve_model(ℳ)
-    simulate(ℳ, 𝒱)
+    to = TimerOutput()
+    𝒱 = @timeit to "times" solve_model(ℳ)
+    # simulate(ℳ, 𝒱)
+    show(to)
 end
 
-run_MDP()
+# run_MDP()

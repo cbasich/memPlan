@@ -26,12 +26,28 @@ struct MemoryState
     action_list::Vector{DomainAction}
 end
 
-function ==(s₁::MemoryState, s₂::MemoryState)
-    return (s₁.state == s₂.state && s₁.action_list == s₂.action_list)
+function ==(a::MemoryState, b::MemoryState)
+    return (a.state == b.state && a.action_list == b.action_list)
+end
+
+function Base.hash(a::MemoryState, h::UInt)
+    h = hash(a.state, h)
+    for act ∈ a.action_list
+        h = hash(act, h)
+    end
+    return h
 end
 
 struct MemoryAction
     value::Union{String,Char}
+end
+
+function Base.hash(a::MemoryAction, h::UInt)
+    return hash(a.value, h)
+end
+
+function ==(a::MemoryAction, b::DomainAction)
+    return isequal(a.value, b.value)
 end
 
 struct SOMDP
@@ -43,6 +59,32 @@ struct SOMDP
    s₀::MemoryState
     δ::Integer
     H::Function
+    Sindex::Dict{MemoryState, Integer}
+    Aindex::Dict{MemoryAction, Integer}
+end
+function SOMDP(M::MDP,
+               S::Vector{MemoryState},
+               A::Vector{MemoryAction},
+               T::Dict{Int, Dict{Int, Vector{Tuple{Int, Float64}}}},
+               R::Function,
+               s₀::MemoryState,
+               δ::Integer,
+               H::Function)
+
+    Aindex, Sindex = generate_index_dicts(A, S)
+    ℳ = SOMDP(M, S, A, T, R, s₀, δ, H, Sindex, Aindex)
+end
+
+function generate_index_dicts(A::Vector{MemoryAction}, S::Vector{MemoryState})
+    Aindex = Dict{MemoryAction, Integer}()
+    for (a, action) ∈ enumerate(A)
+        Aindex[action] = a
+    end
+    Sindex = Dict{MemoryState, Int64}()
+    for (s, state) ∈ enumerate(S)
+        Sindex[state] = s
+    end
+    return Aindex, Sindex
 end
 
 function generate_states(M::MDP, δ::Integer)
@@ -98,8 +140,11 @@ function eta(action::MemoryAction,
 end
 
 function generate_transitions(ℳ::SOMDP)
-    M, S, A, T = ℳ.M, ℳ.S, ℳ.A, ℳ.T
+    M, S, A, T, δ = ℳ.M, ℳ.S, ℳ.A, ℳ.T, ℳ.δ
     for (s, state) in enumerate(S)
+        if length(state.action_list) < δ - 1
+            continue
+        end
         T[s] = Dict{Int, Vector{Pair{Int, Float64}}}()
         for (a, action) in Iterators.reverse(enumerate(A))
             T[s][a] = generate_transitions(ℳ, s, a)
@@ -252,11 +297,11 @@ function generate_successor(ℳ::SOMDP,
                         action::MemoryAction)::MemoryState
     thresh = rand()
     p = 0.
-    T = ℳ.T(ℳ, state, action)
-    for (s′, state′) ∈ enumerate(ℳ.S)
-        p += T[s′]
+    T = ℳ.T[ℳ.Sindex[state]][ℳ.Aindex[action]]
+    for (s′, prob) ∈ T
+        p += prob
         if p >= thresh
-            return state′
+            return ℳ.S[s′]
         end
     end
 end
@@ -267,9 +312,9 @@ function generate_successor(ℳ::SOMDP,
                              a::Integer)::Integer
     thresh = rand()
     p = 0.
-    T = ℳ.T(ℳ, ℳ.S[s], ℳ.A[a])
-    for (s′, state′) ∈ enumerate(ℳ.S)
-        p += T[s′]
+    T = ℳ.T[s][a]
+    for (s′, prob) ∈ T
+        p += prob
         if p >= thresh
             return s′
         end
@@ -339,7 +384,7 @@ function simulate(ℳ::SOMDP,
                 end
             end
 
-            if terminal(state) || terminal(true_state)
+            if terminal(ℳ, state) || terminal(true_state, ℳ.M.g)
                 if v
                     println("Terminating in state $state and
                                        true state $true_state.")
@@ -410,6 +455,28 @@ function build_model(M::MDP,
     return ℳ
 end
 
+function build_models(M::MDP,
+                 DEPTHS::Vector{Int})
+    MODELS = Vector{SOMDP}()
+    A = generate_actions(M)
+    T = Dict{Int, Dict{Int, Vector{Tuple{Int, Float64}}}}()
+    S, s₀ = generate_states(M, 1)
+    println(">>>> Building SOMDP for depth δ = 1 <<<<")
+    ℳ = SOMDP(M, S, A, T, generate_reward, s₀, 1, generate_heuristic)
+    generate_transitions(ℳ)
+    push!(MODELS, ℳ)
+    tmp_ℳ = ℳ
+    for δ in DEPTHS
+        println(">>>> Building SOMDP for depth δ = $δ <<<<")
+        S, s₀ = generate_states(M, δ)
+        ℳ = SOMDP(M, S, A, copy(tmp_ℳ.T), generate_reward, s₀, δ, generate_heuristic)
+        @time generate_transitions(ℳ)
+        push!(MODELS, ℳ)
+        tmp_ℳ = ℳ
+    end
+    return MODELS
+end
+
 function solve_model(ℳ, 𝒱, solver)
     S, s = ℳ.S, ℳ.s₀
     println("Solving...")
@@ -469,7 +536,7 @@ function run_somdp()
     ## PARAMS
     MAP_PATH = joinpath(@__DIR__, "..", "maps", "one_building.txt")
     SOLVER = "laostar"
-    SIM = false
+    SIM = true
     SIM_COUNT = 1
     VERBOSE = false
     DEPTH = 2
@@ -492,5 +559,86 @@ function run_somdp()
         simulate(ℳ, 𝒱, solver, SIM_COUNT, VERBOSE)
     end
 end
+
+function reachability(ℳ::SOMDP, δ::Int, 𝒮::LAOStarSolver)
+    S, state₀, A, T = ℳ.S, ℳ.s₀, ℳ.A, ℳ.T
+    s = index(state₀, S)
+    π = 𝒮.π
+
+    reachable = Set{Int}()
+    reachable_max_depth = Set{Int}()
+    visited = Vector{Int}()
+    push!(visited, s)
+    while !isempty(visited)
+        s = pop!(visited)
+        if s ∈ reachable
+            continue
+        end
+        push!(reachable, s)
+        if length(S[s].action_list) == δ
+            push!(reachable_max_depth, s)
+        end
+        if terminal(S[s])
+            continue
+        end
+        a = π[s]
+        for (s′, p) in T[s][a]
+            push!(visited, s′)
+        end
+    end
+    count = 0
+    for (s, state) in enumerate(S)
+        if length(state.action_list) == δ
+            count += 1
+        end
+    end
+
+    println("Reachable max depth states under optimal policy: $(length(reachable_max_depth))")
+    # println("Percent of total max depth states reachable under optimal policy: $(length(reachable_max_depth)/(length(S) * (length(A)^δ)))")
+    println("Percent of total max depth states reachable under optimal policy: $(length(reachable_max_depth)/count)")
+end
+
+function run_experiment_script()
+    ## PARAMS
+    MAP_PATH = joinpath(@__DIR__, "..", "maps", "one_building.txt")
+    SOLVERS = ["laostar"]
+    HEURISTICS = ["vstar", "null"]
+    SIM_COUNT = 100
+    VERBOSE = false
+    ## delta = 1 is always done by default so don't add here.
+    DEPTHS = [2,3]
+    INIT = 'a'
+    GOAL = 'b'
+
+
+    println("Building MDP...")
+    M = build_model(MAP_PATH, INIT, GOAL)
+    println("Solving MDP...")
+    𝒱 = solve_model(M)
+    println("Building SOMDPs...")
+    MODELS = build_models(M, DEPTHS)
+    println("Solving and Evaluating SOMDPS...")
+    logger =
+    to = TimerOutput()
+    solvers = Vector{Union{FLARESSolver, LAOStarSolver}}
+    for solver in SOLVERS
+        for model in MODELS
+            println("\n", ">>>> Solving SOMDP with depth δ = $(model.δ) <<<<")
+            ## TODO: Line below needs to be adjust eventually when we add in
+            #        iterating over the different heuristics.
+            label = solver * " | " * string(model.δ)
+            # println(length(model.S))
+            𝒮 = @timeit to label solve(model, 𝒱, solver)
+
+            println("\n", ">>>> Evaluating with depth = $(model.δ) and solver = $solver <<<<")
+            simulate(model, 𝒱, 𝒮, SIM_COUNT, VERBOSE)
+
+        end
+    end
+
+    show(to, allocations = false)
+end
+
+run_experiment_script()
 
 run_somdp()
