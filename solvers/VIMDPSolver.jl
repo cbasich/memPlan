@@ -13,7 +13,7 @@ end
 
 function lookahead(𝒱::ValueIterationSolver, M, s::Integer, a::Integer)
     S, T, R, V = M.S, M.T, M.R, 𝒱.V
-    return R[s][a] + .99*sum(T[s][a][s′] * V[s′] for s′=1:length(S))
+    return R[s][a] + .95*sum(T[s][a][s′] * V[s′] for s′=1:length(S))
 end
 
 function backup(𝒱::ValueIterationSolver, M, s::Integer)
@@ -26,8 +26,8 @@ function backup(𝒱::ValueIterationSolver, M, s::Integer)
 end
 
 function solve(𝒱::ValueIterationSolver, M)
-    𝒱.V = Vector{Float64}(undef, length(M.S))
-    𝒱.Qs = Vector{Float64}(undef, length(M.A))
+    𝒱.V = zeros(length(M.S))
+    𝒱.Qs = zeros(length(M.A))
     while true
         residual = 0.
         for s = 1:length(M.S)
@@ -38,6 +38,7 @@ function solve(𝒱::ValueIterationSolver, M)
             𝒱.π[s] = a
         end
         # println(residual)
+        @assert !isnan(residual)
         if residual < 𝒱.eps
             break
         end

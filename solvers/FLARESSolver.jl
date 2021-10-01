@@ -203,5 +203,8 @@ function solve(ℱ::FLARESSolver,
         trial(ℱ, 𝒱, M, s)
         trials += 1
     end
+    for (s, state) ∈ enumerate(M.S)
+        ℱ.π[s] = get_greedy_action(ℱ, 𝒱, M, s)
+    end
     return ℱ.π[s], length(ℱ.dsolved)
 end
