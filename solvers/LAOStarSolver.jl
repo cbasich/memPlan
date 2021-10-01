@@ -99,7 +99,7 @@ function expand(ℒ::LAOStarSolver, 𝒱::ValueIterationSolver, M,
         return 0
     end
     push!(visited, s)
-    if terminal(M.S[s])
+    if terminal(M, M.S[s])
         return 0
     end
 
@@ -156,7 +156,7 @@ function test_convergence(ℒ::LAOStarSolver,
                           s::Integer,
                           visited::Set{Integer})
     error = 0.0
-    if terminal(M.S[s])
+    if terminal(M, M.S[s])
         return 0.0
     end
 
@@ -250,7 +250,7 @@ function solve(ℒ::LAOStarSolver,
         iter += 1
         # println(iter, "            ", error)
     end
-    println("Total iterations taken: $iter")
+    # println("Total iterations taken: $iter")
     println("Total nodes expanded: $total_expanded")
     return ℒ.π[s], total_expanded
 end

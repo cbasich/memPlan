@@ -1,6 +1,6 @@
 using Combinatorics
 using Statistics
-
+using TimerOutputs
 import Base.==
 
 include(joinpath(@__DIR__, "..", "..", "..", "solvers", "VIMDPSolver.jl"))
@@ -21,12 +21,27 @@ struct DomainState
     o::Char
 end
 
+function Base.hash(a::DomainState, h::UInt)
+    h = hash(a.x, h)
+    h = hash(a.y, h)
+    h = hash(a.θ, h)
+    h = hash(a.o, h)
+end
+
 function ==(a::DomainState, b::DomainState)
-    return a.x == b.x && a.y == b.y && a.θ == b.θ && a.𝓁 == b.𝓁 && a.𝒫 == b.𝒫
+    return a.x == b.x && a.y == b.y && a.θ == b.θ && a.o == b.o
 end
 
 struct DomainAction
     value::Union{String,Char}
+end
+
+function Base.hash(a::DomainAction, h::UInt)
+    return hash(a.value, h)
+end
+
+function ==(a::DomainAction, b::DomainAction)
+    return isequal(a.value, b.value)
 end
 
 struct MDP
@@ -54,7 +69,7 @@ function generate_states(grid::Vector{Vector{Any}},
                          init::Char,
                          goal::Char)
     S = Vector{DomainState}()
-    s₀, g = DomainState(), DomainState()
+    s₀, g = PRESERVE_NONE, PRESERVE_NONE
 
     for (i, row) in enumerate(grid)
         for (j, loc) in enumerate(row)
@@ -85,13 +100,13 @@ function generate_states(grid::Vector{Vector{Any}},
         end
     end
 
-    dead_end = CampusState(-1, -1, '∅', '∅')
+    dead_end = DomainState(-1, -1, '∅', '∅')
     push!(S, dead_end)
     return S, s₀, g
 end
 
-function terminal(ℳ::MDP, state::DomainState)
-    return state == ℳ.g
+function terminal(state::DomainState, goal::DomainState)
+    return state.x == goal.x && state.y == goal.y
 end
 
 function generate_actions()
@@ -145,7 +160,7 @@ function move_distribution(s::Int,
                            S::Vector{DomainState},
                         grid::Vector{Vector{Any}})
     state = S[s]
-    xp, yp = pos_shift(a.value)
+    xp, yp = pos_shift(action.value)
     xp, yp = state.x + xp, state.y + yp
     # xpr, ypr = pos_shift(slip_right(a.value))
     # xpl, ypl = pos_shift(slip_left(a.value))
@@ -153,7 +168,7 @@ function move_distribution(s::Int,
     # yp, ypr, ypl = yp + s.y, ypr + s.y, ypl + s.y
     distr = zeros(length(S))
 
-    if grid[xp][yp] == 'X'
+    if xp > length(grid) || yp > length(grid[1]) || grid[xp][yp] == 'X'
         distr[s] = 1.0
         return distr
     end
@@ -164,20 +179,22 @@ function move_distribution(s::Int,
         end
         p = 0.0
         if state.o in ['C', 'E', 'L', 'B']
-            if action.value == s.θ
+            if action.value == state.θ
                 continue
             elseif (state′.x, state′.y) == (xp, yp)
                 p = .8
             end
-        elseif s.o == 'O' && (state′.x, state′.y) == (xp, yp)
+        elseif state.o == 'O' && (state′.x, state′.y) == (xp, yp)
             p = 0.8
         else
-            if state′.o == 'C' && (state′.x, state′.y) == (xp, yp)
+            if state′.o == 'O'
+                p = 0.0
+            elseif state′.o == 'C' && (state′.x, state′.y) == (xp, yp)
                 p = 0.8
             elseif state′.o == '∅' && (state′.x, state′.y) == (xp, yp)
                 p = 0.8
             else
-                p = ((xp == s′.x && yp == s′.y) ? 1/3 : 0.)
+                p = ((xp == state′.x && yp == state′.y) ? 1/3 : 0.)
             end
         end
         distr[s′] = p
@@ -188,7 +205,7 @@ end
 
 function wait_distribution(s::Int,
                            S::Vector{DomainState})
-    s = S[s]
+    state = S[s]
     distr = zeros(length(S))
     if state.o ∉ ['E', 'L', 'B']
         distr[s] = 1.0
@@ -257,7 +274,7 @@ function generate_transitions(S::Vector{DomainState},
 
     for (s, state) in enumerate(S)
         # First check if in dead_end
-        if s == length(S) || state == g
+        if s == length(S) || terminal(state, g)
             for a=1:length(A)
                 T[s][a][s] = 1.0
             end
@@ -285,13 +302,13 @@ end
 
 function generate_rewards(S::Vector{DomainState},
                           A::Vector{DomainAction},
-                          g::DomainState
+                          g::DomainState,
                        grid::Vector{Vector{Any}})
     R = [[-1.0 for (i, _) in enumerate(A)]
                for (j, _) in enumerate(S)]
 
     for (s, state) in enumerate(S)
-        if state == g
+        if terminal(state, g)
             R[s] .= 0.0
             continue
         elseif s == length(S)
@@ -303,12 +320,13 @@ function generate_rewards(S::Vector{DomainState},
                 elseif typeof(action.value) == Char
                     xp, yp = pos_shift(action.value)
                     xp, yp = state.x + xp, state.y + yp
-                    if grid[xp][yp] == 'X'
+                    if xp > length(grid) || yp > length(grid[1]) || grid[xp][yp] == 'X'
                         R[s][a] *= 5.0
                     end
                 end
             end
         end
+    end
     return R
 end
 
@@ -328,7 +346,7 @@ function check_transition_validity(T, S, A)
                 end
                 return 0.
             end
-            if roun(sum(T[i][j]); digits = 5) ≥ 1.
+            if round(sum(T[i][j]); digits = 5) ≥ 1.
                 continue
             else
                 println("Transition error at state index $i and action index $j")
@@ -346,7 +364,7 @@ function build_model(filepath::String, init, goal)
     grid = generate_grid(filepath)
     S, s₀, g = generate_states(grid, init, goal)
     A = generate_actions()
-    T = generate_transitions(S, A, grid, init, g)
+    T = generate_transitions(S, A, grid, s₀, g)
     check_transition_validity(T, S, A)
     R = generate_rewards(S, A, g, grid)
     ℳ = MDP(S, A, T, R, s₀, g)
@@ -386,9 +404,9 @@ function simulate(ℳ::MDP, 𝒱::ValueIterationSolver)
             s = index(state, S)
             a = 𝒱.π[s]
             r += R[s][a]
-            println("Taking action $(A[a]) in state $state.")
+            println("Taking action $(A[a]) in state $state with cost $(R[s][a])")
             state = generate_successor(ℳ, s, a)
-            if terminal(state)
+            if terminal(state, ℳ.g)
                 break
             end
         end
@@ -398,14 +416,15 @@ function simulate(ℳ::MDP, 𝒱::ValueIterationSolver)
 end
 
 ## This is here for Connor
-# function run_MDP()
-#     domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
-#     println("Building Model...")
-#     people_locations = [(7, 19), (10, 12), (6, 2)]
-#     ℳ = build_model(domain_map_file, people_locations)
-#     println("Solving Model...")
-#     𝒱 = @time solve_model(ℳ)
-#     simulate(ℳ, 𝒱)
-# end
-#
-# run_MDP()
+function run_MDP()
+    domain_map_file = joinpath(@__DIR__, "..", "maps", "one_building.txt")
+    println("Building Model...")
+    ℳ = build_model(domain_map_file, 'a', 'b')
+    println("Solving Model...")
+    to = TimerOutput()
+    𝒱 = @timeit to "times" solve_model(ℳ)
+    # simulate(ℳ, 𝒱)
+    show(to)
+end
+
+run_MDP()
