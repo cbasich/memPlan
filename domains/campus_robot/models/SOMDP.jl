@@ -1,6 +1,7 @@
 using Combinatorics
 using Statistics
 using Random
+using ProfileView
 
 import Base.==
 
@@ -108,8 +109,7 @@ function generate_states(M::MDP, δ::Integer)
             end
         end
     end
-    push!(S, MemoryState(DomainState(-1, -1, '↑', '∅'),
-                         DomainAction[DomainAction("wait")]))
+    # push!(S, MemoryState(DomainState(-1, -1, '∅', '∅'), DomainAction[]))
     return S, S[s₀]
 end
 
@@ -199,7 +199,10 @@ function generate_transitions(ℳ::SOMDP, s::Int, a::Int)
                     push!(T, (s′, round(p; digits=5)))
                 end
                 ms′ = length(M.S) + length(M.A) * (s-1) + a
-                push!(T, (ms′, 1.0 - round(mass; digits=5)))
+                mem_p = 1.0 - round(mass; digits=5)
+                if mem_p != 0.0
+                    push!(T, (ms′, mem_p))
+                end
             end
         end
     elseif action.value == "QUERY"  # Here and below is in memory state
@@ -251,7 +254,11 @@ function generate_transitions(ℳ::SOMDP, s::Int, a::Int)
             mass += tmp[k]
             push!(T, (k, round(tmp[k]; digits=5)))
         end
-        push!(T, (ms′, round(1.0-mass; digits=5)))
+
+        mem_p = 1.0-round(mass; digits=5)
+        if mem_p != 0.0
+            push!(T, (ms′, mem_p))
+        end
     end
     return T
 end
@@ -430,7 +437,7 @@ function simulate(ℳ::SOMDP,
                     true_state = generate_successor(M, true_s, a)
                 end
             end
-            if terminal(state) || terminal(true_state, ℳ.M.g)
+            if terminal(ℳ, state) || terminal(true_state, ℳ.M.g)
                 println("Terminating in state $state and
                                    true state $true_state.")
                 break
@@ -469,6 +476,7 @@ function build_models(M::MDP,
     for δ in DEPTHS
         println(">>>> Building SOMDP for depth δ = $δ <<<<")
         S, s₀ = generate_states(M, δ)
+        println(">>>> Total states: $(length(S)) <<<<")
         ℳ = SOMDP(M, S, A, copy(tmp_ℳ.T), generate_reward, s₀, δ, generate_heuristic)
         @time generate_transitions(ℳ)
         push!(MODELS, ℳ)
@@ -534,7 +542,7 @@ end
 
 function run_somdp()
     ## PARAMS
-    MAP_PATH = joinpath(@__DIR__, "..", "maps", "one_building.txt")
+    MAP_PATH = joinpath(@__DIR__, "..", "maps", "single_building.txt")
     SOLVER = "laostar"
     SIM = true
     SIM_COUNT = 1
@@ -578,7 +586,7 @@ function reachability(ℳ::SOMDP, δ::Int, 𝒮::LAOStarSolver)
         if length(S[s].action_list) == δ
             push!(reachable_max_depth, s)
         end
-        if terminal(S[s])
+        if terminal(ℳ, S[s])
             continue
         end
         a = π[s]
@@ -595,7 +603,7 @@ function reachability(ℳ::SOMDP, δ::Int, 𝒮::LAOStarSolver)
 
     println("Reachable max depth states under optimal policy: $(length(reachable_max_depth))")
     # println("Percent of total max depth states reachable under optimal policy: $(length(reachable_max_depth)/(length(S) * (length(A)^δ)))")
-    println("Percent of total max depth states reachable under optimal policy: $(length(reachable_max_depth)/count)")
+    println("Percent of total max depth states reachable under optimal policy: $(100*length(reachable_max_depth)/count)")
 end
 
 function run_experiment_script()
@@ -607,8 +615,8 @@ function run_experiment_script()
     VERBOSE = false
     ## delta = 1 is always done by default so don't add here.
     DEPTHS = [2,3]
-    INIT = 'a'
-    GOAL = 'b'
+    INIT = 's'
+    GOAL = 'g'
 
 
     println("Building MDP...")
@@ -633,12 +641,14 @@ function run_experiment_script()
             println("\n", ">>>> Evaluating with depth = $(model.δ) and solver = $solver <<<<")
             simulate(model, 𝒱, 𝒮, SIM_COUNT, VERBOSE)
 
+            reachability(model, model.δ, 𝒮)
+
         end
     end
 
     show(to, allocations = false)
 end
 
-run_experiment_script()
+@profview run_experiment_script()
 
-run_somdp()
+# run_somdp()
