@@ -227,15 +227,22 @@ function wait_distribution(s::Int,
 end
 
 function cross_distribution(s::Int,
-                            S::Vector{DomainState})
+                            S::Vector{DomainState},
+                         grid::Vector{Vector{Any}})
     state = S[s]
     distr = zeros(length(S))
     if state.o ∉ ['E', 'L', 'B']
         distr[s] = 1.0
         return distr
     end
+    xp, yp = pos_shift(state.θ)
+    xp, yp = state.x + xp, state.y + yp
+    if xp > length(grid) || yp > length(grid[1]) || grid[xp][yp] == 'X'
+        distr[s] = 1.0
+        return distr
+    end
 
-    state′ = (xp, yp, state.θ, '∅')
+    state′ = DomainState(xp, yp, state.θ, '∅')
     if state.o == 'E'
         distr[index(state′, S)] = 1.0
     elseif state.o == 'L'
@@ -283,7 +290,7 @@ function generate_transitions(S::Vector{DomainState},
 
         for (a, action) in enumerate(A)
             if action.value == "cross"
-                T[s][a] = cross_distribution(s, S)
+                T[s][a] = cross_distribution(s, S, grid)
             elseif action.value == "open"
                 T[s][a] = open_distribution(s, S)
             elseif action.value == "wait"
@@ -417,9 +424,9 @@ end
 
 ## This is here for Connor
 function run_MDP()
-    domain_map_file = joinpath(@__DIR__, "..", "maps", "one_building.txt")
+    domain_map_file = joinpath(@__DIR__, "..", "maps", "two_buildings.txt")
     println("Building Model...")
-    ℳ = build_model(domain_map_file, 'a', 'b')
+    ℳ = build_model(domain_map_file, 's', 'g')
     println("Solving Model...")
     to = TimerOutput()
     𝒱 = @timeit to "times" solve_model(ℳ)
@@ -427,4 +434,4 @@ function run_MDP()
     show(to)
 end
 
-run_MDP()
+# run_MDP()

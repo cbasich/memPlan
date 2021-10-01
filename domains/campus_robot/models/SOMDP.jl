@@ -1,7 +1,8 @@
 using Combinatorics
 using Statistics
 using Random
-using ProfileView
+using TimerOutputs
+# using ProfileView
 
 import Base.==
 
@@ -125,18 +126,18 @@ end
 
 function eta(state::MemoryState)
     ## TODO: Actually fill in this function....
-    return 1.0
+    return 0.9
 end
 
 function eta(state::DomainState)
     ## TODO: Actually fill in this function
-    return 1.0
+    return 0.9
 end
 
 function eta(action::MemoryAction,
              state′::MemoryState)
     ## TODO: Actually fill in this function
-    return 1.0
+    return 0.9
 end
 
 function generate_transitions(ℳ::SOMDP)
@@ -207,10 +208,10 @@ function generate_transitions(ℳ::SOMDP, s::Int, a::Int)
         end
     elseif action.value == "QUERY"  # Here and below is in memory state
         prev_action = MemoryAction(last(state.action_list).value)
-        p_a = index(prev_action, A)
+        p_a = ℳ.Aindex[prev_action]
         prev_state = MemoryState(state.state,
                       state.action_list[1:length(state.action_list) - 1])
-        p_s = index(prev_state, S)
+        p_s = ℳ.Sindex[prev_state]
 
         len = length(ℳ.M.S)
         tmp = Dict{Int, Float64}()
@@ -234,7 +235,7 @@ function generate_transitions(ℳ::SOMDP, s::Int, a::Int)
         action_list′ = [action for action in state.action_list]
         push!(action_list′, DomainAction(action.value))
         mstate′ = MemoryState(state.state, action_list′)
-        ms′ = index(mstate′, S)
+        ms′ = ℳ.Sindex[mstate′]
 
         tmp = Dict{Int, Float64}()
         len = length(ℳ.M.S)
@@ -340,7 +341,7 @@ function simulate(ℳ::SOMDP,
                 cum_cost += 3
                 state = MemoryState(true_state, Vector{CampusAction}())
             else
-                s = index(state, S)
+                s = ℳ.Sindex[state]
                 true_s = index(true_state, M.S)
                 a = 𝒱.π[true_s]
                 action = M.A[a]
@@ -370,7 +371,7 @@ function simulate(ℳ::SOMDP,
         state, true_state = ℳ.s₀, M.s₀
         episode_reward = 0.0
         while true
-            s = index(state, S)
+            s = ℳ.Sindex[state]
             a = 𝒮.π[s]
             action = A[a]
             if v
@@ -542,7 +543,7 @@ end
 
 function run_somdp()
     ## PARAMS
-    MAP_PATH = joinpath(@__DIR__, "..", "maps", "single_building.txt")
+    MAP_PATH = joinpath(@__DIR__, "..", "maps", "two_buildings.txt")
     SOLVER = "laostar"
     SIM = true
     SIM_COUNT = 1
@@ -570,7 +571,7 @@ end
 
 function reachability(ℳ::SOMDP, δ::Int, 𝒮::LAOStarSolver)
     S, state₀, A, T = ℳ.S, ℳ.s₀, ℳ.A, ℳ.T
-    s = index(state₀, S)
+    s = ℳ.Sindex[state₀]
     π = 𝒮.π
 
     reachable = Set{Int}()
@@ -608,13 +609,13 @@ end
 
 function run_experiment_script()
     ## PARAMS
-    MAP_PATH = joinpath(@__DIR__, "..", "maps", "one_building.txt")
+    MAP_PATH = joinpath(@__DIR__, "..", "maps", "two_buildings.txt")
     SOLVERS = ["laostar"]
     HEURISTICS = ["vstar", "null"]
     SIM_COUNT = 100
     VERBOSE = false
     ## delta = 1 is always done by default so don't add here.
-    DEPTHS = [2,3]
+    DEPTHS = [2,]
     INIT = 's'
     GOAL = 'g'
 
@@ -623,6 +624,8 @@ function run_experiment_script()
     M = build_model(MAP_PATH, INIT, GOAL)
     println("Solving MDP...")
     𝒱 = solve_model(M)
+    println(index(M.s₀, M.S))
+    println("Expected reward in base domain: $(𝒱.V[index(M.s₀, M.S)])")
     println("Building SOMDPs...")
     MODELS = build_models(M, DEPTHS)
     println("Solving and Evaluating SOMDPS...")
@@ -649,6 +652,6 @@ function run_experiment_script()
     show(to, allocations = false)
 end
 
-@profview run_experiment_script()
+run_experiment_script()
 
 # run_somdp()
