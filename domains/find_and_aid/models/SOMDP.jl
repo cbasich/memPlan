@@ -265,8 +265,6 @@ function generate_reward(ℳ::SOMDP, s::Int, a::Int)
     state, action = S[s], A[a]
     if action.value == "QUERY"
         return (-.2 * sum(state.state.𝒫))
-    elseif action.value == "aid" && !isempty(ℳ.S[s].action_list)
-            return -1000000000
     elseif length(state.action_list) == 0
         return M.R[s][a]
     else

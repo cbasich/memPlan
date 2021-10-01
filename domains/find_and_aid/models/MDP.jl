@@ -5,8 +5,6 @@ import Base.==
 
 include(joinpath(@__DIR__, "..", "..", "..", "solvers", "VIMDPSolver.jl"))
 
-
-
 function index(element, collection)
     for i=1:length(collection)
         if collection[i] == element
@@ -57,8 +55,6 @@ struct MDP
     T
     R
     s₀
-    Sindex::Dict{DomainState, Integer}
-    Aindex::Dict{DomainAction, Integer}
 end
 
 function generate_people_smoke_level_vector(grid::Vector{Vector{Any}},
@@ -274,16 +270,28 @@ end
 
 function generate_rewards(S::Vector{DomainState},
                           A::Vector{DomainAction},
-                     state₀::DomainState)
+                          state₀::DomainState,
+                          people_locations::Vector{Tuple{Int, Int}})
     R = [[-.1 for (i, _) in enumerate(A)]
                for (j, _) in enumerate(S)]
 
+    aid_idx = -1 
+    for (a, action) ∈ enumerate(A)
+        if action.value == "aid"
+            @assert aid_idx == -1
+            aid_idx = a
+            break
+        end
+    end
     for (s, state) in enumerate(S)
         R[s] *= sum(state.𝒫)
         if state.x == 0
             manhattan = abs(state.x - state₀.x) + abs(state.y - state₀.y)
             R[s] *= (2 * manhattan * sum(state.𝒫))
             # R[s] .-= 2.0 * ceil(sqrt(length(S)))
+        end
+        if (state.x, state.y) ∉ people_locations
+            R[s][aid_idx] = -1001
         end
     end
     return R
@@ -319,38 +327,16 @@ function check_transition_validity(T, S, A)
     end
 end
 
-function MDP(S::Vector{DomainState},
-             A::Vector{DomainAction},
-             T,
-             R,
-             s₀)
-    Sindex, Aindex = generate_dicts(S,A)
-    return MDP(S, A, T, R, s₀, Sindex, Aindex)
-end
-
 function build_model(filepath::String, people_locations)
     grid = generate_grid(filepath)
     S, s₀ = generate_states(grid, people_locations)
     A = generate_actions()
     T = generate_transitions(S, A, grid, people_locations, s₀)
     check_transition_validity(T, S, A)
-    R = generate_rewards(S, A, s₀)
+    R = generate_rewards(S, A, s₀, people_locations)
     ℳ = MDP(S, A, T, R, s₀)
     return ℳ
 end
-
-function generate_dicts(S, A)
-    Sindex = Dict{DomainState, Integer}()
-    for (i, s) ∈ enumerate(S)
-        Sindex[s] = i
-    end
-    Aindex = Dict{DomainAction, Integer}()
-    for (i, a) ∈ enumerate(A)
-        Aindex[a] = i
-    end
-    return Sindex, Aindex
-end
-
 
 function solve_model(ℳ::MDP)
     𝒱 = ValueIterationSolver(.001,
