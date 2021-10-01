@@ -465,14 +465,14 @@ function build_models(M::MDP,
     S, s₀ = generate_states(M, 1)
     println(">>>> Building SOMDP for depth δ = 1 <<<<")
     ℳ = SOMDP(M, S, A, T, generate_reward, s₀, 1, generate_heuristic)
-    generate_transitions(ℳ, incremental=false)
+    generate_transitions(ℳ, false)
     push!(MODELS, ℳ)
     tmp_ℳ = ℳ
     for δ in DEPTHS
         println(">>>> Building SOMDP for depth δ = $δ <<<<")
         S, s₀ = generate_states(M, δ)
         ℳ = SOMDP(M, S, A, copy(tmp_ℳ.T), generate_reward, s₀, δ, generate_heuristic)
-        @time generate_transitions(ℳ, incremental=true)
+        @time generate_transitions(ℳ, true)
         push!(MODELS, ℳ)
         tmp_ℳ = ℳ
     end
