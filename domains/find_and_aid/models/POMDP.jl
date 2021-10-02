@@ -7,19 +7,26 @@ include("SOMDP.jl")
 δ = 1
 
 
+# ================= DOMAIN CONFIGURATION BEGIN ================= 
+
+domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_1.txt")
+PEOPLE_LOCATIONS = [(2,2), (4,7), (3,8)] # COLLAPSE 1
+#PEOPLE_LOCATIONS = [(7, 19), (10, 12), (6, 2)] # COLLAPSE 2
+
+# ================= DOMAIN CONFIGURATION END ================= 
+
+
 struct FindPOMDP <: POMDP{DomainState, DomainAction, DomainState}
     ℳ::SOMDP
     ∅::DomainState #null observation
+    people_locations::Vector{Tuple{Int, Int}}
 end
 
-function FindPOMDP(ℳ::SOMDP)
-    return FindPOMDP(ℳ, DomainState(-1, -1, '∅', -1, Vector{Integer}()))
+function FindPOMDP(ℳ::SOMDP, people_locations::Vector{Tuple{Int, Int}})
+    return FindPOMDP(ℳ, DomainState(-1, -1, '∅', -1, Vector{Integer}()), people_locations)
 end
 
 
-domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
-#PEOPLE_LOCATIONS = [(2,2), (4,7), (3,8)] # COLLAPSE 1
-PEOPLE_LOCATIONS = [(7, 19), (10, 12), (6, 2)] # COLLAPSE 2
 M = build_model(domain_map_file, PEOPLE_LOCATIONS)
 ℳ = build_model(M, δ)
 
@@ -80,7 +87,11 @@ function POMDPs.obsindex(pomdp::FindPOMDP, obs::DomainState)
     end
 end
 
-m = FindPOMDP(ℳ)
+m = FindPOMDP(ℳ, PEOPLE_LOCATIONS)
+
+
+
+# ================= SOLVER CONFIGURATION BEGIN ================= 
 
 @time begin
     #solver = QMDPSolver(SparseValueIterationSolver(max_iterations=1000, belres=1e-3,verbose=true))
@@ -89,15 +100,17 @@ m = FindPOMDP(ℳ)
     policy = @time SARSOP.solve(solver, m)
 end
 
+
+# ================= SOLVER CONFIGURATION END ================= 
+
 rsum = 0.0
 rewards = Vector{Float64}()
-
 
 for i in 1:100
     println(i)
     global rsum = 0.0
     for (s,b,a,o,r) in stepthrough(m, policy, "s,b,a,o,r", max_steps=100)
-#        println("s: $s, a: $a, o: $o")
+#        println("s: $s, a: $a, o: $o, r: $r")
         global rsum += r
     end
     push!(rewards, rsum)

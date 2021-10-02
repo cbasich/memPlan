@@ -264,7 +264,7 @@ function generate_reward(ℳ::SOMDP, s::Int, a::Int)
     M, S, A = ℳ.M, ℳ.S, ℳ.A
     state, action = S[s], A[a]
     if action.value == "QUERY"
-        return (-.2 * sum(state.state.𝒫))
+        return (-0.2 * sum(state.state.𝒫))
     elseif length(state.action_list) == 0
         return M.R[s][a]
     else
@@ -320,35 +320,35 @@ function generate_successor(ℳ::SOMDP,
     end
 end
 
-function simulate(ℳ::SOMDP,
-                   𝒱::ValueIterationSolver)
-    M, S, A, R, state = ℳ.M, ℳ.S, ℳ.A, ℳ.R, ℳ.s₀
-    true_state, G = M.s₀, M.G
-    rewards = Vector{Float64}()
-    for i = 1:10
-        episode_reward = 0.0
-        while true_state ∉ G
-            if length(state.action_list) > 0
-                cum_cost += 3
-                state = MemoryState(true_state, Vector{CampusAction}())
-            else
-                s = ℳ.Sindex[state]
-                true_s = ℳ.Sindex[true_state]index(true_state, M.S)
-                a = 𝒱.π[true_s]
-                action = M.A[a]
-                memory_action = MemoryAction(action.value)
-                cum_cost += M.C[true_s][a]
-                state = generate_successor(ℳ, state, memory_action)
-                if length(state.action_list) == 0
-                    true_state = state.state
-                else
-                    true_state = generate_successor(M, true_s, a)
-                end
-            end
-        end
-    end
-    println("Average cost to goal: $cum_cost")
-end
+#function simulate(ℳ::SOMDP,
+#                   𝒱::ValueIterationSolver)
+#    M, S, A, R, state = ℳ.M, ℳ.S, ℳ.A, ℳ.R, ℳ.s₀
+#    true_state, G = M.s₀, M.G
+#    rewards = Vector{Float64}()
+#    for i = 1:10
+#        episode_reward = 0.0
+#        while true_state ∉ G
+#            if length(state.action_list) > 0
+#                cum_cost += 3
+#                state = MemoryState(true_state, Vector{CampusAction}())
+#            else
+#                s = ℳ.Sindex[state]
+#                true_s = ℳ.Sindex[true_state]index(true_state, M.S)
+#                a = 𝒱.π[true_s]
+#                action = M.A[a]
+#                memory_action = MemoryAction(action.value)
+#                cum_cost += M.C[true_s][a]
+#                state = generate_successor(ℳ, state, memory_action)
+#                if length(state.action_list) == 0
+#                    true_state = state.state
+#                else
+#                    true_state = generate_successor(M, true_s, a)
+#                end
+#            end
+#        end
+#    end
+#    println("Average cost to goal: $cum_cost")
+#end
 
 function simulate(ℳ::SOMDP,
                    𝒱::ValueIterationSolver,
@@ -399,48 +399,48 @@ function simulate(ℳ::SOMDP,
     println("Total cumulative reward: $(round(mean(r);digits=4)) ⨦ $(std(r))")
 end
 #
-function simulate(ℳ::SOMDP,
-                   𝒱::ValueIterationSolver,
-                   π::MCTSSolver)
-    M, S, A, R = ℳ.M, ℳ.S, ℳ.A, ℳ.R
-    rewards = Vector{Float64}()
-    # println("Expected cost to goal: $(ℒ.V[index(state, S)])")
-    for i=1:1
-        state, true_state = ℳ.s₀, M.s₀
-        r = 0.0
-        while true
-            # s = index(state, S)
-            # a, _ = solve(ℒ, 𝒱, ℳ, s)
-            action = solve(π, state)
-            # action = A[a]
-            println("Taking action $action in memory state $state
-                                           in true state $true_state.")
-            if action.value == "QUERY"
-                state = MemoryState(true_state, Vector{DomainAction}())
-                r -= 3
-            else
-                true_s = index(true_state, M.S)
-                a = index(action, A)
-                r += M.R[true_s][a]
-                state = generate_successor(ℳ, state, action)
-                if length(state.action_list) == 0
-                    true_state = state.state
-                else
-                    true_state = generate_successor(M, true_s, a)
-                end
-            end
-            if terminal(state) || terminal(true_state)
-                println("Terminating in state $state and
-                                   true state $true_state.")
-                break
-            end
-        end
-        push!(rewards, r)
-        # println("Episode $i  Total cumulative cost: $(mean(costs)) ⨦ $(std(costs))")
-    end
-    # println("Reached the goal.")
-    println("Average reward: $(mean(costs)) ⨦ $(std(costs))")
-end
+#function simulate(ℳ::SOMDP,
+#                   𝒱::ValueIterationSolver,
+#                   π::MCTSSolver)
+#    M, S, A, R = ℳ.M, ℳ.S, ℳ.A, ℳ.R
+#    rewards = Vector{Float64}()
+#    # println("Expected cost to goal: $(ℒ.V[index(state, S)])")
+#    for i=1:1
+#        state, true_state = ℳ.s₀, M.s₀
+#        r = 0.0
+#        while true
+#            # s = index(state, S)
+#            # a, _ = solve(ℒ, 𝒱, ℳ, s)
+#            action = solve(π, state)
+#            # action = A[a]
+#            println("Taking action $action in memory state $state
+#                                           in true state $true_state.")
+#            if action.value == "QUERY"
+#                state = MemoryState(true_state, Vector{DomainAction}())
+#                r -= 3
+#            else
+#                true_s = index(true_state, M.S)
+#                a = index(action, A)
+#                r += M.R[true_s][a]
+#                state = generate_successor(ℳ, state, action)
+#                if length(state.action_list) == 0
+#                    true_state = state.state
+#                else
+#                    true_state = generate_successor(M, true_s, a)
+#                end
+#            end
+#            if terminal(state) || terminal(true_state)
+#                println("Terminating in state $state and
+#                                   true state $true_state.")
+#                break
+#            end
+#        end
+#        push!(rewards, r)
+#        # println("Episode $i  Total cumulative cost: $(mean(costs)) ⨦ $(std(costs))")
+#    end
+#    # println("Reached the goal.")
+#    println("Average reward: $(mean(costs)) ⨦ $(std(costs))")
+#end
 
 function build_model(M::MDP,
                      δ::Int)

@@ -55,6 +55,25 @@ struct MDP
     T
     R
     s₀
+    Sindex::Dict{DomainState, Integer}
+    Aindex::Dict{DomainAction, Integer}
+end
+
+function generate_index_dicts(A::Vector{DomainAction}, S::Vector{DomainState})
+    Aindex = Dict{DomainAction, Integer}()
+    for (i, a) ∈ enumerate(A)
+        Aindex[a] = i
+    end
+    Sindex = Dict{DomainState, Integer}()
+    for (i, s) ∈ enumerate(S)
+        Sindex[s] = i
+    end
+    return Aindex, Sindex
+end
+
+function MDP(S::Vector{DomainState}, A::Vector{DomainAction}, T, R, s₀)
+    Aindex, Sindex = generate_index_dicts(A, S)
+    return MDP(S, A, T, R, s₀, Sindex, Aindex)
 end
 
 function generate_people_smoke_level_vector(grid::Vector{Vector{Any}},
