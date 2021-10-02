@@ -2,6 +2,7 @@ using Combinatorics
 using Statistics
 using Random
 using TimerOutputs
+using ProfileView
 
 import Base.==
 
@@ -64,7 +65,6 @@ struct SOMDP
     Sindex::Dict{MemoryState, Integer}
     Aindex::Dict{MemoryAction, Integer}
 end
-
 function SOMDP(M::MDP,
                S::Vector{MemoryState},
                A::Vector{MemoryAction},
@@ -75,7 +75,7 @@ function SOMDP(M::MDP,
                H::Function)
 
     Aindex, Sindex = generate_index_dicts(A, S)
-    ℳ = SOMDP(M, S, A, T, generate_reward, s₀, δ, generate_heuristic, Sindex, Aindex)
+    ℳ = SOMDP(M, S, A, T, R, s₀, δ, H, Sindex, Aindex)
 end
 
 function generate_index_dicts(A::Vector{MemoryAction}, S::Vector{MemoryState})
@@ -471,6 +471,7 @@ function build_models(M::MDP,
     for δ in DEPTHS
         println(">>>> Building SOMDP for depth δ = $δ <<<<")
         S, s₀ = generate_states(M, δ)
+        println(">>>> Number of states: $(length(S)) <<<<")
         ℳ = SOMDP(M, S, A, copy(tmp_ℳ.T), generate_reward, s₀, δ, generate_heuristic)
         @time generate_transitions(ℳ, true)
         push!(MODELS, ℳ)
@@ -573,7 +574,7 @@ end
 
 function run_experiment_script()
     ## PARAMS
-    MAP_PATH = joinpath(@__DIR__, "..", "maps", "collapse_1.txt")
+    MAP_PATH = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
     SOLVERS = ["laostar"]
     HEURISTICS = ["vstar", "null"]
     SIM_COUNT = 100
@@ -581,8 +582,8 @@ function run_experiment_script()
     ## delta = 1 is always done by default so don't add here.
     DEPTHS = [2,3]
 
-    PEOPLE_LOCATIONS = [(2,2), (4,7), (3,8)] # COLLAPSE 1
-    # PEOPLE_LOCATIONS = [(7, 19), (10, 12), (6, 2)] # COLLAPSE 2
+    # PEOPLE_LOCATIONS = [(2,2), (4,7), (3,8)] # COLLAPSE 1
+    PEOPLE_LOCATIONS = [(7, 19), (10, 12), (6, 2)] # COLLAPSE 2
 
     println("Building MDP...")
     M = build_model(MAP_PATH, PEOPLE_LOCATIONS)
@@ -614,7 +615,7 @@ end
 
 function run_somdp()
     ## PARAMS
-    MAP_PATH = joinpath(@__DIR__, "..", "maps", "collapse_1.txt")
+    # MAP_PATH = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
     SOLVER = "laostar"
     SIM = true
     SIM_COUNT = 100
@@ -626,8 +627,8 @@ function run_somdp()
     DELTA_COMPARISON = false
     SOLUTION_COMPARISON = false
 
-    PEOPLE_LOCATIONS = [(2,2), (4,7), (3,8)] # COLLAPSE 1
-    # PEOPLE_LOCATIONS = [(7, 19), (10, 12), (6, 2)] # COLLAPSE 2
+    # PEOPLE_LOCATIONS = [(2,2), (4,7), (3,8)] # COLLAPSE 1
+    PEOPLE_LOCATIONS = [(7, 19), (10, 12), (6, 2)] # COLLAPSE 2
 
     ## MAIN SCRIPT
     println("Building MDP...")
@@ -656,4 +657,3 @@ end
 run_experiment_script()
 
 run_somdp()
-

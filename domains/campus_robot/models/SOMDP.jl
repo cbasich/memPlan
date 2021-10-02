@@ -1,7 +1,8 @@
 using Combinatorics
 using Statistics
 using Random
-using ProfileView
+using TimerOutputs
+# using ProfileView
 
 import Base.==
 
@@ -125,18 +126,18 @@ end
 
 function eta(state::MemoryState)
     ## TODO: Actually fill in this function....
-    return 1.0
+    return 0.9
 end
 
 function eta(state::DomainState)
     ## TODO: Actually fill in this function
-    return 1.0
+    return 0.9
 end
 
 function eta(action::MemoryAction,
              state′::MemoryState)
     ## TODO: Actually fill in this function
-    return 1.0
+    return 0.9
 end
 
 function generate_transitions(ℳ::SOMDP)
@@ -207,10 +208,10 @@ function generate_transitions(ℳ::SOMDP, s::Int, a::Int)
         end
     elseif action.value == "QUERY"  # Here and below is in memory state
         prev_action = MemoryAction(last(state.action_list).value)
-        p_a = index(prev_action, A)
+        p_a = ℳ.Aindex[prev_action]
         prev_state = MemoryState(state.state,
                       state.action_list[1:length(state.action_list) - 1])
-        p_s = index(prev_state, S)
+        p_s = ℳ.Sindex[prev_state]
 
         len = length(ℳ.M.S)
         tmp = Dict{Int, Float64}()
@@ -234,7 +235,7 @@ function generate_transitions(ℳ::SOMDP, s::Int, a::Int)
         action_list′ = [action for action in state.action_list]
         push!(action_list′, DomainAction(action.value))
         mstate′ = MemoryState(state.state, action_list′)
-        ms′ = index(mstate′, S)
+        ms′ = ℳ.Sindex[mstate′]
 
         tmp = Dict{Int, Float64}()
         len = length(ℳ.M.S)
@@ -340,7 +341,7 @@ function simulate(ℳ::SOMDP,
                 cum_cost += 3
                 state = MemoryState(true_state, Vector{CampusAction}())
             else
-                s = index(state, S)
+                s = ℳ.Sindex[state]
                 true_s = index(true_state, M.S)
                 a = 𝒱.π[true_s]
                 action = M.A[a]
@@ -370,7 +371,7 @@ function simulate(ℳ::SOMDP,
         state, true_state = ℳ.s₀, M.s₀
         episode_reward = 0.0
         while true
-            s = index(state, S)
+            s = ℳ.Sindex[state]
             a = 𝒮.π[s]
             action = A[a]
             if v
@@ -542,7 +543,7 @@ end
 
 function run_somdp()
     ## PARAMS
-    MAP_PATH = joinpath(@__DIR__, "..", "maps", "single_building.txt")
+    MAP_PATH = joinpath(@__DIR__, "..", "maps", "two_buildings.txt")
     SOLVER = "laostar"
     SIM = true
     SIM_COUNT = 1
@@ -570,7 +571,7 @@ end
 
 function reachability(ℳ::SOMDP, δ::Int, 𝒮::LAOStarSolver)
     S, state₀, A, T = ℳ.S, ℳ.s₀, ℳ.A, ℳ.T
-    s = index(state₀, S)
+    s = ℳ.Sindex[state₀]
     π = 𝒮.π
 
     reachable = Set{Int}()
@@ -606,15 +607,50 @@ function reachability(ℳ::SOMDP, δ::Int, 𝒮::LAOStarSolver)
     println("Percent of total max depth states reachable under optimal policy: $(100*length(reachable_max_depth)/count)")
 end
 
+function action_change_experiment(ℳ₁, ℳ₂, 𝒮₁, 𝒮₂)
+    S1, S2 = ℳ₁.S, ℳ₂.S
+
+    non_max_term = Set{MemoryState}()
+    for (s, state) in enumerate(S1)
+        if length(state.action_list) != ℳ₁.δ-1 || !haskey(𝒮₁.π, s)
+            continue
+        end
+        a = 𝒮₁.π[s]
+        terminal = true
+        for (sp, p) in ℳ₁.T[s][a]
+            if length(S1[sp].action_list) == ℳ₁.δ
+                terminal = false
+            end
+        end
+        if terminal == true
+            push!(non_max_term, state)
+        end
+    end
+
+    bad_no_good_counterexamples = Set{MemoryState}()
+    for state in non_max_term
+        s = index(state, S2)
+        a = 𝒮₂.π[s]
+        for (sp, p) in ℳ₁.T[s][a]
+            if length(S2[sp].action_list) == ℳ₁.δ
+                push!(bad_no_good_counterexamples, state)
+                break
+            end
+        end
+    end
+
+    println("Number of counterexamples is: $(length(bad_no_good_counterexamples))")
+end
+
 function run_experiment_script()
     ## PARAMS
-    MAP_PATH = joinpath(@__DIR__, "..", "maps", "one_building.txt")
+    MAP_PATH = joinpath(@__DIR__, "..", "maps", "two_buildings.txt")
     SOLVERS = ["laostar"]
     HEURISTICS = ["vstar", "null"]
     SIM_COUNT = 100
     VERBOSE = false
     ## delta = 1 is always done by default so don't add here.
-    DEPTHS = [2,3]
+    DEPTHS = [2,3,4]
     INIT = 's'
     GOAL = 'g'
 
@@ -623,20 +659,26 @@ function run_experiment_script()
     M = build_model(MAP_PATH, INIT, GOAL)
     println("Solving MDP...")
     𝒱 = solve_model(M)
+    println(index(M.s₀, M.S))
+    println("Expected reward in base domain: $(𝒱.V[index(M.s₀, M.S)])")
     println("Building SOMDPs...")
     MODELS = build_models(M, DEPTHS)
     println("Solving and Evaluating SOMDPS...")
-    logger =
     to = TimerOutput()
-    solvers = Vector{Union{FLARESSolver, LAOStarSolver}}
+    solvers = Vector{Union{FLARESSolver, LAOStarSolver}}()
     for solver in SOLVERS
-        for model in MODELS
+        for i=1:length(MODELS)
+            model = MODELS[i]
             println("\n", ">>>> Solving SOMDP with depth δ = $(model.δ) <<<<")
             ## TODO: Line below needs to be adjust eventually when we add in
             #        iterating over the different heuristics.
             label = solver * " | " * string(model.δ)
             # println(length(model.S))
             𝒮 = @timeit to label solve(model, 𝒱, solver)
+            if i > 1
+                action_change_experiment(MODELS[i-1], model, last(solvers), 𝒮)
+            end
+            push!(solvers, 𝒮)
 
             println("\n", ">>>> Evaluating with depth = $(model.δ) and solver = $solver <<<<")
             simulate(model, 𝒱, 𝒮, SIM_COUNT, VERBOSE)
@@ -649,6 +691,6 @@ function run_experiment_script()
     show(to, allocations = false)
 end
 
-@profview run_experiment_script()
+run_experiment_script()
 
 # run_somdp()

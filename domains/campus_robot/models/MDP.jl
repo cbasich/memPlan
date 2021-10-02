@@ -227,15 +227,22 @@ function wait_distribution(s::Int,
 end
 
 function cross_distribution(s::Int,
-                            S::Vector{DomainState})
+                            S::Vector{DomainState},
+                         grid::Vector{Vector{Any}})
     state = S[s]
     distr = zeros(length(S))
     if state.o ∉ ['E', 'L', 'B']
         distr[s] = 1.0
         return distr
     end
+    xp, yp = pos_shift(state.θ)
+    xp, yp = state.x + xp, state.y + yp
+    if xp > length(grid) || yp > length(grid[1]) || grid[xp][yp] == 'X'
+        distr[s] = 1.0
+        return distr
+    end
 
-    state′ = (xp, yp, state.θ, '∅')
+    state′ = DomainState(xp, yp, state.θ, '∅')
     if state.o == 'E'
         distr[index(state′, S)] = 1.0
     elseif state.o == 'L'
@@ -283,7 +290,7 @@ function generate_transitions(S::Vector{DomainState},
 
         for (a, action) in enumerate(A)
             if action.value == "cross"
-                T[s][a] = cross_distribution(s, S)
+                T[s][a] = cross_distribution(s, S, grid)
             elseif action.value == "open"
                 T[s][a] = open_distribution(s, S)
             elseif action.value == "wait"
@@ -396,34 +403,37 @@ end
 
 function simulate(ℳ::MDP, 𝒱::ValueIterationSolver)
     S, A, R = ℳ.S, ℳ.A, ℳ.R
-    r = 0.
-    for i=1:1
+    rs = Vector{Float64}()
+    for i=1:100
+        r = 0.0
         state = ℳ.s₀
-        println("Expected reward: $(𝒱.V[index(state, S)])")
+        # println("Expected reward: $(𝒱.V[index(state, S)])")
         while true
             s = index(state, S)
             a = 𝒱.π[s]
             r += R[s][a]
-            println("Taking action $(A[a]) in state $state with cost $(R[s][a])")
+            # println("Taking action $(A[a]) in state $state with cost $(R[s][a])")
             state = generate_successor(ℳ, s, a)
             if terminal(state, ℳ.g)
                 break
             end
         end
+        push!(rs, r)
         # println("Reached the goal with total cost $cost.")
     end
-    println("Average reward: $(r / 1.0)")
+    println("Average reward: $(mean(rs)) ⨦ $(std(rs))")
 end
 
 ## This is here for Connor
 function run_MDP()
-    domain_map_file = joinpath(@__DIR__, "..", "maps", "one_building.txt")
+    domain_map_file = joinpath(@__DIR__, "..", "maps", "two_buildings.txt")
     println("Building Model...")
-    ℳ = build_model(domain_map_file, 'a', 'b')
+    ℳ = build_model(domain_map_file, 's', 'g')
     println("Solving Model...")
     to = TimerOutput()
     𝒱 = @timeit to "times" solve_model(ℳ)
-    # simulate(ℳ, 𝒱)
+    println("Expected reward is: $(𝒱.V[index(ℳ.s₀, ℳ.S)])")
+    simulate(ℳ, 𝒱)
     show(to)
 end
 
