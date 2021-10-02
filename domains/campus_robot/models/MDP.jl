@@ -69,7 +69,7 @@ function generate_states(grid::Vector{Vector{Any}},
                          init::Char,
                          goal::Char)
     S = Vector{DomainState}()
-    s₀, g = PRESERVE_NONE, PRESERVE_NONE
+    s₀, g = nothing, nothing
 
     for (i, row) in enumerate(grid)
         for (j, loc) in enumerate(row)
