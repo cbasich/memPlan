@@ -48,7 +48,7 @@ function Base.hash(a::MemoryAction, h::UInt)
     return hash(a.value, h)
 end
 
-function ==(a::MemoryAction, b::DomainAction)
+function ==(a::MemoryAction, b::MemoryAction)
     return isequal(a.value, b.value)
 end
 
@@ -546,7 +546,7 @@ function run_somdp()
     MAP_PATH = joinpath(@__DIR__, "..", "maps", "two_buildings.txt")
     SOLVER = "laostar"
     SIM = true
-    SIM_COUNT = 1
+    SIM_COUNT = 100
     VERBOSE = false
     DEPTH = 2
     INIT = 's'
@@ -554,14 +554,16 @@ function run_somdp()
 
 
     ## MAIN SCRIPT
-    println("Building MDP...")
-    M = build_model(MAP_PATH, INIT, GOAL)
-    println("Solving MDP...")
-    𝒱 = solve_model(M)
-    println("Building SOMDP...")
-    ℳ = @time build_model(M, DEPTH)
-    println("Solving SOMDP...")
-    solver = @time solve(ℳ, 𝒱, SOLVER)
+    @time begin
+        println("Building MDP...")
+        M = build_model(MAP_PATH, INIT, GOAL)
+        println("Solving MDP...")
+        𝒱 = solve_model(M)
+        println("Building SOMDP...")
+        ℳ = @time build_model(M, DEPTH)
+        println("Solving SOMDP...")
+        solver = @time solve(ℳ, 𝒱, SOLVER)
+    end
 
     if SIM
         println("Simulating...")
