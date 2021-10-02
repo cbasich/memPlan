@@ -403,23 +403,25 @@ end
 
 function simulate(ℳ::MDP, 𝒱::ValueIterationSolver)
     S, A, R = ℳ.S, ℳ.A, ℳ.R
-    r = 0.
-    for i=1:1
+    rs = Vector{Float64}()
+    for i=1:100
+        r = 0.0
         state = ℳ.s₀
-        println("Expected reward: $(𝒱.V[index(state, S)])")
+        # println("Expected reward: $(𝒱.V[index(state, S)])")
         while true
             s = index(state, S)
             a = 𝒱.π[s]
             r += R[s][a]
-            println("Taking action $(A[a]) in state $state with cost $(R[s][a])")
+            # println("Taking action $(A[a]) in state $state with cost $(R[s][a])")
             state = generate_successor(ℳ, s, a)
             if terminal(state, ℳ.g)
                 break
             end
         end
+        push!(rs, r)
         # println("Reached the goal with total cost $cost.")
     end
-    println("Average reward: $(r / 1.0)")
+    println("Average reward: $(mean(rs)) ⨦ $(std(rs))")
 end
 
 ## This is here for Connor
@@ -430,8 +432,9 @@ function run_MDP()
     println("Solving Model...")
     to = TimerOutput()
     𝒱 = @timeit to "times" solve_model(ℳ)
-    # simulate(ℳ, 𝒱)
+    println("Expected reward is: $(𝒱.V[index(ℳ.s₀, ℳ.S)])")
+    simulate(ℳ, 𝒱)
     show(to)
 end
 
-# run_MDP()
+run_MDP()
