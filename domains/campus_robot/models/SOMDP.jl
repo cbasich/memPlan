@@ -124,20 +124,27 @@ function generate_actions(M::MDP)
     return A
 end
 
-function eta(state::MemoryState)
-    ## TODO: Actually fill in this function....
-    return 0.9
+function eta(state::DomainState)
+    ## two_buildings_map
+    x, y = state.x, state.y
+    if 9 >= x >= 4 && 14 >= y >= 12
+        return 0.1
+    elseif x == 6 && y == 18
+        return 0.1
+    elseif 8 >= x >= 4 && 23 >= y >= 22
+        return 0.1
+    else
+        return 0.9
+    end
 end
 
-function eta(state::DomainState)
-    ## TODO: Actually fill in this function
-    return 0.9
+function eta(state::MemoryState)
+    return eta(state.state)
 end
 
 function eta(action::MemoryAction,
-             state′::MemoryState)
-    ## TODO: Actually fill in this function
-    return 0.9
+              state::MemoryState)
+    return eta(state)
 end
 
 function generate_transitions(ℳ::SOMDP)
@@ -313,7 +320,6 @@ function generate_successor(ℳ::SOMDP,
         end
     end
 end
-
 
 function generate_successor(ℳ::SOMDP,
                              s::Integer,
@@ -673,11 +679,10 @@ function run_experiment_script()
             ## TODO: Line below needs to be adjust eventually when we add in
             #        iterating over the different heuristics.
             label = solver * " | " * string(model.δ)
-            # println(length(model.S))
             𝒮 = @timeit to label solve(model, 𝒱, solver)
-            if i > 1
-                action_change_experiment(MODELS[i-1], model, last(solvers), 𝒮)
-            end
+            # if i > 1
+            #     action_change_experiment(MODELS[i-1], model, last(solvers), 𝒮)
+            # end
             push!(solvers, 𝒮)
 
             println("\n", ">>>> Evaluating with depth = $(model.δ) and solver = $solver <<<<")
