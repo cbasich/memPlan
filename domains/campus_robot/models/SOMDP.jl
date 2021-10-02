@@ -607,6 +607,41 @@ function reachability(ℳ::SOMDP, δ::Int, 𝒮::LAOStarSolver)
     println("Percent of total max depth states reachable under optimal policy: $(100*length(reachable_max_depth)/count)")
 end
 
+function action_change_experiment(ℳ₁, ℳ₂, 𝒮₁, 𝒮₂)
+    S1, S2 = ℳ₁.S, ℳ₂.S
+
+    non_max_term = Set{MemoryState}()
+    for (s, state) in enumerate(S1)
+        if length(state.action_list) != ℳ₁.δ-1 || !haskey(𝒮₁.π, s)
+            continue
+        end
+        a = 𝒮₁.π[s]
+        terminal = true
+        for (sp, p) in ℳ₁.T[s][a]
+            if length(S1[sp].action_list) == ℳ₁.δ
+                terminal = false
+            end
+        end
+        if terminal == true
+            push!(non_max_term, state)
+        end
+    end
+
+    bad_no_good_counterexamples = Set{MemoryState}()
+    for state in non_max_term
+        s = index(state, S2)
+        a = 𝒮₂.π[s]
+        for (sp, p) in ℳ₁.T[s][a]
+            if length(S2[sp].action_list) == ℳ₁.δ
+                push!(bad_no_good_counterexamples, state)
+                break
+            end
+        end
+    end
+
+    println("Number of counterexamples is: $(length(bad_no_good_counterexamples))")
+end
+
 function run_experiment_script()
     ## PARAMS
     MAP_PATH = joinpath(@__DIR__, "..", "maps", "two_buildings.txt")
@@ -615,7 +650,7 @@ function run_experiment_script()
     SIM_COUNT = 100
     VERBOSE = false
     ## delta = 1 is always done by default so don't add here.
-    DEPTHS = [2,]
+    DEPTHS = [2,3,4]
     INIT = 's'
     GOAL = 'g'
 
@@ -629,17 +664,21 @@ function run_experiment_script()
     println("Building SOMDPs...")
     MODELS = build_models(M, DEPTHS)
     println("Solving and Evaluating SOMDPS...")
-    logger =
     to = TimerOutput()
-    solvers = Vector{Union{FLARESSolver, LAOStarSolver}}
+    solvers = Vector{Union{FLARESSolver, LAOStarSolver}}()
     for solver in SOLVERS
-        for model in MODELS
+        for i=1:length(MODELS)
+            model = MODELS[i]
             println("\n", ">>>> Solving SOMDP with depth δ = $(model.δ) <<<<")
             ## TODO: Line below needs to be adjust eventually when we add in
             #        iterating over the different heuristics.
             label = solver * " | " * string(model.δ)
             # println(length(model.S))
             𝒮 = @timeit to label solve(model, 𝒱, solver)
+            if i > 1
+                action_change_experiment(MODELS[i-1], model, last(solvers), 𝒮)
+            end
+            push!(solvers, 𝒮)
 
             println("\n", ">>>> Evaluating with depth = $(model.δ) and solver = $solver <<<<")
             simulate(model, 𝒱, 𝒮, SIM_COUNT, VERBOSE)
