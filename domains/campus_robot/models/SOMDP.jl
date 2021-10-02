@@ -48,7 +48,7 @@ function Base.hash(a::MemoryAction, h::UInt)
     return hash(a.value, h)
 end
 
-function ==(a::MemoryAction, b::DomainAction)
+function ==(a::MemoryAction, b::MemoryAction)
     return isequal(a.value, b.value)
 end
 
@@ -147,10 +147,10 @@ function eta(action::MemoryAction,
     return eta(state)
 end
 
-function generate_transitions(ℳ::SOMDP)
+function generate_transitions(ℳ::SOMDP, incremental::Bool=false)
     M, S, A, T, δ = ℳ.M, ℳ.S, ℳ.A, ℳ.T, ℳ.δ
     for (s, state) in enumerate(S)
-        if length(state.action_list) < δ - 1
+        if incremental && length(state.action_list) < δ - 1
             continue
         end
         T[s] = Dict{Int, Vector{Pair{Int, Float64}}}()
@@ -168,7 +168,7 @@ function check_transition_validity(ℳ::SOMDP)
             for (s′, p) in T[s][a]
                 mass += p
             end
-            if round(mass; digits=5) != 1.0
+            if round(mass; digits=4) != 1.0
                 println("Transition error at state $state and action $action.")
                 println("State index: $s      Action index: $a")
                 println("Total probability mass of $mass.")
@@ -477,7 +477,7 @@ function build_models(M::MDP,
     S, s₀ = generate_states(M, 1)
     println(">>>> Building SOMDP for depth δ = 1 <<<<")
     ℳ = SOMDP(M, S, A, T, generate_reward, s₀, 1, generate_heuristic)
-    generate_transitions(ℳ)
+    generate_transitions(ℳ, false)
     push!(MODELS, ℳ)
     tmp_ℳ = ℳ
     for δ in DEPTHS
@@ -485,7 +485,7 @@ function build_models(M::MDP,
         S, s₀ = generate_states(M, δ)
         println(">>>> Total states: $(length(S)) <<<<")
         ℳ = SOMDP(M, S, A, copy(tmp_ℳ.T), generate_reward, s₀, δ, generate_heuristic)
-        @time generate_transitions(ℳ)
+        @time generate_transitions(ℳ, true)
         push!(MODELS, ℳ)
         tmp_ℳ = ℳ
     end
@@ -552,22 +552,24 @@ function run_somdp()
     MAP_PATH = joinpath(@__DIR__, "..", "maps", "two_buildings.txt")
     SOLVER = "laostar"
     SIM = true
-    SIM_COUNT = 1
+    SIM_COUNT = 100
     VERBOSE = false
     DEPTH = 2
-    INIT = 'a'
-    GOAL = 'b'
+    INIT = 's'
+    GOAL = 'g'
 
 
     ## MAIN SCRIPT
-    println("Building MDP...")
-    M = build_model(MAP_PATH, INIT, GOAL)
-    println("Solving MDP...")
-    𝒱 = solve_model(M)
-    println("Building SOMDP...")
-    ℳ = @time build_model(M, DEPTH)
-    println("Solving SOMDP...")
-    solver = @time solve(ℳ, 𝒱, SOLVER)
+    @time begin
+        println("Building MDP...")
+        M = build_model(MAP_PATH, INIT, GOAL)
+        println("Solving MDP...")
+        𝒱 = solve_model(M)
+        println("Building SOMDP...")
+        ℳ = @time build_model(M, DEPTH)
+        println("Solving SOMDP...")
+        solver = @time solve(ℳ, 𝒱, SOLVER)
+    end
 
     if SIM
         println("Simulating...")
@@ -698,4 +700,4 @@ end
 
 run_experiment_script()
 
-# run_somdp()
+run_somdp()

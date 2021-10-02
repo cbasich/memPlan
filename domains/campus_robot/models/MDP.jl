@@ -51,6 +51,25 @@ struct MDP
     R
     s₀
     g
+    Sindex::Dict{DomainState, Integer}
+    Aindex::Dict{DomainAction, Integer}
+end
+
+function MDP(S::Vector{DomainState}, A::Vector{DomainAction}, T, R, s₀, g)
+    Aindex, Sindex = generate_index_dicts(A, S)
+    return MDP(S, A, T, R, s₀, g, Sindex, Aindex)
+end
+
+function generate_index_dicts(A::Vector{DomainAction}, S::Vector{DomainState})
+    Aindex = Dict{DomainAction, Integer}()
+    for (a, action) ∈ enumerate(A)
+        Aindex[action] = a
+    end
+    Sindex = Dict{DomainState, Int64}()
+    for (s, state) ∈ enumerate(S)
+        Sindex[state] = s
+    end
+    return Aindex, Sindex
 end
 
 function generate_grid(filename::String)
@@ -69,7 +88,7 @@ function generate_states(grid::Vector{Vector{Any}},
                          init::Char,
                          goal::Char)
     S = Vector{DomainState}()
-    s₀, g = PRESERVE_NONE, PRESERVE_NONE
+    s₀, g = nothing, nothing
 
     for (i, row) in enumerate(grid)
         for (j, loc) in enumerate(row)
