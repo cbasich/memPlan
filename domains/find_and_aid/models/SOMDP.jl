@@ -2,7 +2,7 @@ using Combinatorics
 using Statistics
 using Random
 using TimerOutputs
-using ProfileView
+# using ProfileView
 
 import Base.==
 
@@ -505,7 +505,7 @@ function solve_model(ℳ, 𝒱, solver)
         println("Expected reard: $(π.Q[(s, a)])")
         return π, a
     elseif solver == "flares"
-        ℱ = FLARESSolver(100000, 2, false, false, -1000, 0.001,
+        ℱ = FLARESSolver(100000, 6, false, false, -1000, 0.001,
                          Dict{Integer, Integer}(),
                          zeros(length(ℳ.S)),
                          zeros(length(ℳ.S)),
@@ -540,6 +540,7 @@ function reachability(ℳ::SOMDP, δ::Int, 𝒮::LAOStarSolver)
     π = 𝒮.π
 
     reachable = Set{Int}()
+    reachable_max_depth = 0
     reachable_max_depths = zeros(δ)
     visited = Vector{Int}()
     push!(visited, s)
@@ -552,6 +553,9 @@ function reachability(ℳ::SOMDP, δ::Int, 𝒮::LAOStarSolver)
         if length(S[s].action_list) > 0
             reachable_max_depths[length(S[s].action_list)] += 1
             # push!(reachable_max_depths[δ], s)
+            if length(S[s].action_list) == δ
+                reachable_max_depth += 1
+            end
         end
         if terminal(S[s])
             continue
@@ -570,7 +574,7 @@ function reachability(ℳ::SOMDP, δ::Int, 𝒮::LAOStarSolver)
 
     println("Reachable max depth states under optimal policy: $reachable_max_depths")
     # println("Percent of total max depth states reachable under optimal policy: $(length(reachable_max_depth)/(length(S) * (length(A)^δ)))")
-    # println("Percent of total max depth states reachable under optimal policy: $(length(reachable_max_depth)/count)")
+    println("Percent of total max depth states reachable under optimal policy: $(length(reachable_max_depth)/count)")
 end
 
 function action_change_experiment(ℳ₁, ℳ₂, 𝒮₁, 𝒮₂)
@@ -617,7 +621,7 @@ function run_experiment_script()
     VERBOSE = false
     REACHABILITY = true
     ## delta = 1 is always done by default so don't add here.
-    DEPTHS = [2,3]
+    DEPTHS = [2,3,4]
 
     # PEOPLE_LOCATIONS = [(2,2), (4,7), (3,8)] # COLLAPSE 1
     PEOPLE_LOCATIONS = [(7, 19), (10, 12), (6, 2)] # COLLAPSE 2
@@ -641,9 +645,9 @@ function run_experiment_script()
             label = solver * " | " * string(model.δ)
             # println(length(model.S))
             𝒮 = @timeit to label solve(model, 𝒱, solver)
-            if i > 1
-                action_change_experiment(MODELS[i-1], model, last(solvers), 𝒮)
-            end
+            # if i > 1
+            #     action_change_experiment(MODELS[i-1], model, last(solvers), 𝒮)
+            # end
             push!(solvers, 𝒮)
             println("\n", ">>>> Evaluating with depth = $(model.δ) and solver = $solver <<<<")
             simulate(model, 𝒱, 𝒮, SIM_COUNT, VERBOSE)
@@ -659,7 +663,7 @@ end
 
 function run_somdp()
     ## PARAMS
-    # MAP_PATH = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
+    MAP_PATH = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
     SOLVER = "laostar"
     SIM = true
     SIM_COUNT = 100
@@ -700,4 +704,4 @@ end
 
 run_experiment_script()
 #
-# run_somdp()
+run_somdp()
