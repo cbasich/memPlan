@@ -168,7 +168,8 @@ function check_transition_validity(ℳ::SOMDP)
                 println("Transition error at state $state and action $action.")
                 println("State index: $s      Action index: $a")
                 println("Total probability mass of $mass.")
-                println("Transition vector is the following: \n $(T[s][a])")
+                println("Transition vector is the following: $(T[s][a])")
+                println("Succ state vector: $([S[s] for (s,p) in T[s][a]])")
                 @assert false
             end
         end
@@ -181,6 +182,12 @@ function generate_transitions(ℳ::SOMDP, s::Int, a::Int)
     if state.state.x == -1
         return [(s, 1.0)]
     end
+
+    # if state.state.x == 0
+    #     s = index(DomainState(0, 0, '↑', 0, state.state.𝒫), M.S)
+    #     println(s)
+    #     return [(s, 1.0)]
+    # end
 
     T = Vector{Tuple{Int, Float64}}()
     # Inside a domain state
@@ -263,8 +270,16 @@ end
 function generate_reward(ℳ::SOMDP, s::Int, a::Int)
     M, S, A = ℳ.M, ℳ.S, ℳ.A
     state, action = S[s], A[a]
-    if action.value == "QUERY"
+    if state.state.x == 0
+        # a = 1 here because it gets angry if action is query otherwise
+        # and in theory they all have the same cost so,.
+        return M.R[index(state.state, M.S)][1]
+    elseif action.value == "QUERY"
+        # if length(state.action_list) == ℳ.δ
+        #     return 0.0
+        # else
         return (-0.2 * sum(state.state.𝒫))
+        # end
     elseif length(state.action_list) == 0
         return M.R[s][a]
     else
@@ -465,6 +480,7 @@ function build_models(M::MDP,
     S, s₀ = generate_states(M, 1)
     println(">>>> Building SOMDP for depth δ = 1 <<<<")
     ℳ = SOMDP(M, S, A, T, generate_reward, s₀, 1, generate_heuristic)
+    println(">>>> Number of states: $(length(S)) <<<<")
     generate_transitions(ℳ, false)
     push!(MODELS, ℳ)
     tmp_ℳ = ℳ
@@ -540,6 +556,7 @@ function reachability(ℳ::SOMDP, δ::Int, 𝒮::LAOStarSolver)
     π = 𝒮.π
 
     reachable = Set{Int}()
+    reachable_states = Set{MemoryState}()
     reachable_max_depth = 0
     reachable_max_depths = zeros(δ)
     visited = Vector{Int}()
@@ -550,6 +567,7 @@ function reachability(ℳ::SOMDP, δ::Int, 𝒮::LAOStarSolver)
             continue
         end
         push!(reachable, s)
+        push!(reachable_states, S[s])
         if length(S[s].action_list) > 0
             reachable_max_depths[length(S[s].action_list)] += 1
             # push!(reachable_max_depths[δ], s)
@@ -574,21 +592,23 @@ function reachability(ℳ::SOMDP, δ::Int, 𝒮::LAOStarSolver)
 
     println("Reachable max depth states under optimal policy: $reachable_max_depths")
     # println("Percent of total max depth states reachable under optimal policy: $(length(reachable_max_depth)/(length(S) * (length(A)^δ)))")
-    println("Percent of total max depth states reachable under optimal policy: $(length(reachable_max_depth)/count)")
+    println("Percent of total max depth states reachable under optimal policy: $(100.0*length(reachable_max_depth)/count)")
+    return reachable_states
 end
 
 function action_change_experiment(ℳ₁, ℳ₂, 𝒮₁, 𝒮₂)
-    S1, S2 = ℳ₁.S, ℳ₂.S
+    S1, S2 = reachability(ℳ₁,ℳ₁.δ,𝒮₁), ℳ₂.S
 
     non_max_term = Set{MemoryState}()
-    for (s, state) in enumerate(S1)
+    for state in S1
+        s = index(state, ℳ₁.S)
         if length(state.action_list) != ℳ₁.δ-1 || !haskey(𝒮₁.π, s)
             continue
         end
         a = 𝒮₁.π[s]
         terminal = true
         for (sp, p) in ℳ₁.T[s][a]
-            if length(S1[sp].action_list) == ℳ₁.δ
+            if length(ℳ₁.S[sp].action_list) == ℳ₁.δ
                 terminal = false
             end
         end
@@ -610,18 +630,34 @@ function action_change_experiment(ℳ₁, ℳ₂, 𝒮₁, 𝒮₂)
     end
 
     println("Number of counterexamples is: $(length(bad_no_good_counterexamples))")
+    if length(bad_no_good_counterexamples) == 0
+        return
+    end
+    counterexample = first(bad_no_good_counterexamples)
+    println("Counterexample:     $counterexample")
+    s1 = index(counterexample, ℳ₁.S)
+    println("Action 1: $(ℳ₁.A[𝒮₁.π[s1]])")
+    s2 = index(counterexample, ℳ₂.S)
+    println("Action 2: $(ℳ₂.A[𝒮₂.π[s1]])")
+    for (sp, p) in ℳ₁.T[s1][𝒮₁.π[s1]]
+        println(ℳ₁.S[sp], "      ", p)
+    end
+    println("----------------")
+    for (sp, p) in ℳ₂.T[s2][𝒮₂.π[s2]]
+        println(ℳ₂.S[sp], "      ", p)
+    end
 end
 
 function run_experiment_script()
     ## PARAMS
-    MAP_PATH = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
+    MAP_PATH = joinpath(@__DIR__, "..", "maps", "collapse_3.txt")
     SOLVERS = ["laostar"]
     HEURISTICS = ["vstar", "null"]
     SIM_COUNT = 100
     VERBOSE = false
     REACHABILITY = true
     ## delta = 1 is always done by default so don't add here.
-    DEPTHS = [2,3,4]
+    DEPTHS = [2,3]
 
     # PEOPLE_LOCATIONS = [(2,2), (4,7), (3,8)] # COLLAPSE 1
     PEOPLE_LOCATIONS = [(7, 19), (10, 12), (6, 2)] # COLLAPSE 2
@@ -645,9 +681,9 @@ function run_experiment_script()
             label = solver * " | " * string(model.δ)
             # println(length(model.S))
             𝒮 = @timeit to label solve(model, 𝒱, solver)
-            # if i > 1
-            #     action_change_experiment(MODELS[i-1], model, last(solvers), 𝒮)
-            # end
+            if i > 1
+                action_change_experiment(MODELS[i-1], model, last(solvers), 𝒮)
+            end
             push!(solvers, 𝒮)
             println("\n", ">>>> Evaluating with depth = $(model.δ) and solver = $solver <<<<")
             simulate(model, 𝒱, 𝒮, SIM_COUNT, VERBOSE)
@@ -665,10 +701,10 @@ function run_somdp()
     ## PARAMS
     MAP_PATH = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
     SOLVER = "laostar"
-    SIM = true
+    SIM = false
     SIM_COUNT = 100
     VERBOSE = false
-    DEPTH = 1
+    DEPTH = 2
 
     ## EXPERIMENT FlAGS
     REACHABILITY = false
@@ -703,5 +739,5 @@ function run_somdp()
 end
 
 run_experiment_script()
-#
-run_somdp()
+# # #
+# run_somdp()
