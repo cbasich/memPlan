@@ -209,8 +209,14 @@ function generate_transitions(ℳ::SOMDP, s::Int, a::Int)
                     mass += p
                     push!(T, (s′, round(p; digits=5)))
                 end
-                ms′ = length(M.S) + length(M.A) * (s-1) + a
-                push!(T, (ms′, 1.0 - round(mass; digits=5)))
+                p = 1.0 - round(mass; digits=5)
+                if p > 0.0
+                    ms′ = length(M.S) + length(M.A) * (s-1) + a
+                    push!(T, (ms′, p))
+                end
+                # if state == MemoryState(DomainState(9, 11, '↓', 0, Integer[1,2,3]), DomainAction[]) && action == MemoryAction('→')
+                #     println(T)
+                # end
             end
         end
     elseif action.value == "QUERY"  # Here and below is in memory state
@@ -262,7 +268,10 @@ function generate_transitions(ℳ::SOMDP, s::Int, a::Int)
             mass += tmp[k]
             push!(T, (k, round(tmp[k]; digits=5)))
         end
-        push!(T, (ms′, round(1.0-mass; digits=5)))
+        p = round(1.0-mass; digits=5)
+        if p > 0.0
+            push!(T, (ms′, p))
+        end
     end
     return T
 end
@@ -740,4 +749,4 @@ end
 
 run_experiment_script()
 # # #
-# run_somdp()
+run_somdp()
