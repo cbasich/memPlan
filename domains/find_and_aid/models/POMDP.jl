@@ -1,5 +1,5 @@
 using POMDPs, POMDPModelTools, QMDP, SARSOP, PointBasedValueIteration, POMDPSimulators, DiscreteValueIteration
-using POMDPs, BasicPOMCP, POMDPModelTools
+using POMDPs, BasicPOMCP, POMDPModelTools, ARDESPOT
 
 include("SOMDP.jl")
 
@@ -100,6 +100,8 @@ m = FindPOMDP(ℳ, PEOPLE_LOCATIONS)
     #solver = PBVISolver(verbose=true)
     solver = POMCPSolver()
     planner = BasicPOMCP.solve(solver, m)
+    # solver = DESPOTSolver(bounds=(-20.0, 0.0))
+    # planner = ARDESPOT.solve(solver, m)
     # policy = @time SARSOP.solve(solver, m)
 end
 
@@ -109,11 +111,11 @@ end
 rsum = 0.0
 rewards = Vector{Float64}()
 
-for i in 1:10
+for i in 1:1
     println(i)
     global rsum = 0.0
-    for (s,a,o) in BasicPOMCP.stepthrough(m, planner, "s,a,o", max_steps=100)
-        # println("s: $s, a: $a, o: $o")
+    for (s,a,o) in BasicPOMCP.stepthrough(m, planner, "s,a,o")
+        println("s: $s, a: $a, o: $o")
         r = POMDPs.reward(m, s, a)
         global rsum += r
     end
