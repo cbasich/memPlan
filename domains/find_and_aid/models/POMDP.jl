@@ -1,4 +1,5 @@
 using POMDPs, POMDPModelTools, QMDP, SARSOP, PointBasedValueIteration, POMDPSimulators, DiscreteValueIteration
+using POMDPs, BasicPOMCP, POMDPModelTools
 
 include("SOMDP.jl")
 
@@ -7,13 +8,13 @@ include("SOMDP.jl")
 δ = 1
 
 
-# ================= DOMAIN CONFIGURATION BEGIN ================= 
+# ================= DOMAIN CONFIGURATION BEGIN =================
 
 domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_1.txt")
 PEOPLE_LOCATIONS = [(2,2), (4,7), (3,8)] # COLLAPSE 1
 #PEOPLE_LOCATIONS = [(7, 19), (10, 12), (6, 2)] # COLLAPSE 2
 
-# ================= DOMAIN CONFIGURATION END ================= 
+# ================= DOMAIN CONFIGURATION END =================
 
 
 struct FindPOMDP <: POMDP{DomainState, DomainAction, DomainState}
@@ -65,7 +66,7 @@ end
 
 POMDPs.states(pomdp::FindPOMDP) = ℳ.M.S
 POMDPs.actions(pomdp::FindPOMDP) = A
-POMDPs.observations(pomdp::FindPOMDP) = Ω 
+POMDPs.observations(pomdp::FindPOMDP) = Ω
 POMDPs.isterminal(pomdp::FindPOMDP, s::DomainState) = terminal(s)
 POMDPs.discount(pomdp::FindPOMDP) = 0.9
 POMDPs.initialstate(pomdp::FindPOMDP) = Deterministic(pomdp.ℳ.M.s₀)
@@ -91,26 +92,29 @@ m = FindPOMDP(ℳ, PEOPLE_LOCATIONS)
 
 
 
-# ================= SOLVER CONFIGURATION BEGIN ================= 
+# ================= SOLVER CONFIGURATION BEGIN =================
 
 @time begin
     #solver = QMDPSolver(SparseValueIterationSolver(max_iterations=1000, belres=1e-3,verbose=true))
-    solver = SARSOPSolver()
+    # solver = SARSOPSolver()
     #solver = PBVISolver(verbose=true)
-    policy = @time SARSOP.solve(solver, m)
+    solver = POMCPSolver()
+    planner = BasicPOMCP.solve(solver, m)
+    # policy = @time SARSOP.solve(solver, m)
 end
 
 
-# ================= SOLVER CONFIGURATION END ================= 
+# ================= SOLVER CONFIGURATION END =================
 
 rsum = 0.0
 rewards = Vector{Float64}()
 
-for i in 1:100
+for i in 1:10
     println(i)
     global rsum = 0.0
-    for (s,b,a,o,r) in stepthrough(m, policy, "s,b,a,o,r", max_steps=100)
-#        println("s: $s, a: $a, o: $o, r: $r")
+    for (s,a,o) in BasicPOMCP.stepthrough(m, planner, "s,a,o", max_steps=100)
+        # println("s: $s, a: $a, o: $o")
+        r = POMDPs.reward(m, s, a)
         global rsum += r
     end
     push!(rewards, rsum)
