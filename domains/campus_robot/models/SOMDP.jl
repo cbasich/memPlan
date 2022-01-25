@@ -125,6 +125,7 @@ function generate_actions(M::MDP)
 end
 
 function eta(state::DomainState)
+    # return 1.0
     ## two_buildings_map
     x, y = state.x, state.y
     if 9 >= x >= 4 && 14 >= y >= 12
@@ -277,7 +278,10 @@ function generate_reward(ℳ::SOMDP, s::Int, a::Int)
     if state.state.x == -1
         return -10
     elseif action.value == "QUERY"
-        return -3
+        # if length(state.action_list) == ℳ.δ
+        #     return 0.0
+        # end
+        return -3.0
     elseif length(state.action_list) == 0
         return M.R[s][a]
     else
@@ -335,35 +339,35 @@ function generate_successor(ℳ::SOMDP,
     end
 end
 
-function simulate(ℳ::SOMDP,
-                   𝒱::ValueIterationSolver)
-    M, S, A, R, state = ℳ.M, ℳ.S, ℳ.A, ℳ.R, ℳ.s₀
-    true_state, G = M.s₀, M.G
-    rewards = Vector{Float64}()
-    for i = 1:10
-        episode_reward = 0.0
-        while true_state ∉ G
-            if length(state.action_list) > 0
-                cum_cost += 3
-                state = MemoryState(true_state, Vector{CampusAction}())
-            else
-                s = ℳ.Sindex[state]
-                true_s = index(true_state, M.S)
-                a = 𝒱.π[true_s]
-                action = M.A[a]
-                memory_action = MemoryAction(action.value)
-                cum_cost += M.C[true_s][a]
-                state = generate_successor(ℳ, state, memory_action)
-                if length(state.action_list) == 0
-                    true_state = state.state
-                else
-                    true_state = generate_successor(M, true_s, a)
-                end
-            end
-        end
-    end
-    println("Average cost to goal: $cum_cost")
-end
+# function simulate(ℳ::SOMDP,
+#                    𝒱::ValueIterationSolver)
+#     M, S, A, R, state = ℳ.M, ℳ.S, ℳ.A, ℳ.R, ℳ.s₀
+#     true_state, G = M.s₀, M.G
+#     rewards = Vector{Float64}()
+#     for i = 1:10
+#         episode_reward = 0.0
+#         while true_state ∉ G
+#             if length(state.action_list) > 0
+#                 cum_cost += 3
+#                 state = MemoryState(true_state, Vector{CampusAction}())
+#             else
+#                 s = ℳ.Sindex[state]
+#                 true_s = index(true_state, M.S)
+#                 a = 𝒱.π[true_s]
+#                 action = M.A[a]
+#                 memory_action = MemoryAction(action.value)
+#                 cum_cost += M.C[true_s][a]
+#                 state = generate_successor(ℳ, state, memory_action)
+#                 if length(state.action_list) == 0
+#                     true_state = state.state
+#                 else
+#                     true_state = generate_successor(M, true_s, a)
+#                 end
+#             end
+#         end
+#     end
+#     println("Average cost to goal: $cum_cost")
+# end
 
 function simulate(ℳ::SOMDP,
                    𝒱::ValueIterationSolver,
@@ -381,10 +385,12 @@ function simulate(ℳ::SOMDP,
             a = 𝒮.π[s]
             action = A[a]
             if v
-                println("Taking action $action in memory state $state
-                                               in true state $true_state.")
+                println("Taking action $action in memory state $state in true state $true_state.")
             end
             if action.value == "QUERY"
+                # if length(state.action_list) < ℳ.δ
+                #     episode_reward -= 3.0
+                # end
                 state = MemoryState(true_state, Vector{DomainAction}())
                 episode_reward -= 3
             else
@@ -397,11 +403,11 @@ function simulate(ℳ::SOMDP,
                     true_state = generate_successor(M, true_s, a)
                 end
             end
+            # println("Episode reward so far: $episode_reward")
 
             if terminal(ℳ, state) || terminal(true_state, ℳ.M.g)
                 if v
-                    println("Terminating in state $state and
-                                       true state $true_state.")
+                    println("Terminating in state $state and true state $true_state.")
                 end
                 break
             end
@@ -414,48 +420,50 @@ function simulate(ℳ::SOMDP,
     println("Total cumulative reward: $(mean(r)) ⨦ $(std(r))")
 end
 #
-function simulate(ℳ::SOMDP,
-                   𝒱::ValueIterationSolver,
-                   π::MCTSSolver)
-    M, S, A, R = ℳ.M, ℳ.S, ℳ.A, ℳ.R
-    rewards = Vector{Float64}()
-    # println("Expected cost to goal: $(ℒ.V[index(state, S)])")
-    for i=1:1
-        state, true_state = ℳ.s₀, M.s₀
-        r = 0.0
-        while true
-            # s = index(state, S)
-            # a, _ = solve(ℒ, 𝒱, ℳ, s)
-            action = @time solve(π, state)
-            # action = A[a]
-            println("Taking action $action in memory state $state
-                                           in true state $true_state.")
-            if action.value == "QUERY"
-                state = MemoryState(true_state, Vector{DomainAction}())
-                r -= 3
-            else
-                true_s = index(true_state, M.S)
-                a = index(action, A)
-                r += M.R[true_s][a]
-                state = generate_successor(ℳ, state, action)
-                if length(state.action_list) == 0
-                    true_state = state.state
-                else
-                    true_state = generate_successor(M, true_s, a)
-                end
-            end
-            if terminal(ℳ, state) || terminal(true_state, ℳ.M.g)
-                println("Terminating in state $state and
-                                   true state $true_state.")
-                break
-            end
-        end
-        push!(rewards, r)
-        # println("Episode $i  Total cumulative cost: $(mean(costs)) ⨦ $(std(costs))")
-    end
-    # println("Reached the goal.")
-    println("Average reward: $(mean(costs)) ⨦ $(std(costs))")
-end
+# function simulate(ℳ::SOMDP,
+#                    𝒱::ValueIterationSolver,
+#                    π::MCTSSolver)
+#     M, S, A, R = ℳ.M, ℳ.S, ℳ.A, ℳ.R
+#     rewards = Vector{Float64}()
+#     # println("Expected cost to goal: $(ℒ.V[index(state, S)])")
+#     for i=1:1
+#         state, true_state = ℳ.s₀, M.s₀
+#         r = 0.0
+#         while true
+#             # s = index(state, S)
+#             # a, _ = solve(ℒ, 𝒱, ℳ, s)
+#             action = @time solve(π, state)
+#             # action = A[a]
+#             println("Taking action $action in memory state $state in true state $true_state.")
+#             if action.value == "QUERY"
+#                 if length(state.action_list) < ℳ.δ
+#                     r  -= 3
+#                 end
+#                 state = MemoryState(true_state, Vector{DomainAction}())
+#                 # r -= 3
+#             else
+#                 true_s = index(true_state, M.S)
+#                 a = index(action, A)
+#                 r += M.R[true_s][a]
+#                 state = generate_successor(ℳ, state, action)
+#                 if length(state.action_list) == 0
+#                     true_state = state.state
+#                 else
+#                     true_state = generate_successor(M, true_s, a)
+#                 end
+#                 print(r)
+#             end
+#             if terminal(ℳ, state) || terminal(true_state, ℳ.M.g)
+#                 println("Terminating in state $state and true state $true_state.")
+#                 break
+#             end
+#         end
+#         push!(rewards, r)
+#         # println("Episode $i  Total cumulative cost: $(mean(costs)) ⨦ $(std(costs))")
+#     end
+#     # println("Reached the goal.")
+#     println("Average reward: $(mean(costs)) ⨦ $(std(costs))")
+# end
 
 function build_model(M::MDP,
                      δ::Int)
@@ -477,6 +485,7 @@ function build_models(M::MDP,
     S, s₀ = generate_states(M, 1)
     println(">>>> Building SOMDP for depth δ = 1 <<<<")
     ℳ = SOMDP(M, S, A, T, generate_reward, s₀, 1, generate_heuristic)
+    println(">>>> Total States: $(length(S)) <<<<")
     generate_transitions(ℳ, false)
     push!(MODELS, ℳ)
     tmp_ℳ = ℳ
@@ -551,24 +560,25 @@ function run_somdp()
     ## PARAMS
     MAP_PATH = joinpath(@__DIR__, "..", "maps", "two_buildings.txt")
     SOLVER = "laostar"
-    SIM = true
+    SIM = false
     SIM_COUNT = 100
     VERBOSE = false
-    DEPTH = 2
+    DEPTH = 4
     INIT = 's'
     GOAL = 'g'
 
 
     ## MAIN SCRIPT
-    @time begin
+    begin
         println("Building MDP...")
         M = build_model(MAP_PATH, INIT, GOAL)
+        println(">>>> Number of states: $(length(M.S)) <<<<")
         println("Solving MDP...")
         𝒱 = solve_model(M)
         println("Building SOMDP...")
         ℳ = @time build_model(M, DEPTH)
         println("Solving SOMDP...")
-        solver = @time solve(ℳ, 𝒱, SOLVER)
+        solver = solve(ℳ, 𝒱, SOLVER)
     end
 
     if SIM
@@ -579,11 +589,32 @@ end
 
 function reachability(ℳ::SOMDP, δ::Int, 𝒮::LAOStarSolver)
     S, state₀, A, T = ℳ.S, ℳ.s₀, ℳ.A, ℳ.T
-    s = ℳ.Sindex[state₀]
+    s = index(state₀, S)
     π = 𝒮.π
 
+    denominator = 0
+    state_stack = Vector{Int}()
+    visited_states = Set{Int}()
+    push!(state_stack, s)
+    while !isempty(state_stack)
+        s = pop!(state_stack)
+        push!(visited_states, s)
+        if length(S[s].action_list) == ℳ.δ
+            denominator += 1
+        end
+        for (a, action) in enumerate(A)
+            for (sp, p) in T[s][a]
+                if sp ∉ visited_states
+                    push!(state_stack, sp)
+                end
+            end
+        end
+    end
+
     reachable = Set{Int}()
-    reachable_max_depth = Set{Int}()
+    reachable_states = Set{MemoryState}()
+    reachable_max_depth = 0
+    reachable_max_depths = zeros(δ)
     visited = Vector{Int}()
     push!(visited, s)
     while !isempty(visited)
@@ -592,10 +623,18 @@ function reachability(ℳ::SOMDP, δ::Int, 𝒮::LAOStarSolver)
             continue
         end
         push!(reachable, s)
-        if length(S[s].action_list) == δ
-            push!(reachable_max_depth, s)
+        push!(reachable_states, S[s])
+        if length(S[s].action_list) > 0
+            reachable_max_depths[length(S[s].action_list)] += 1
+            # push!(reachable_max_depths[δ], s)
+            if length(S[s].action_list) == δ
+                reachable_max_depth += 1
+            end
         end
         if terminal(ℳ, S[s])
+            continue
+        end
+        if !haskey(π, s)
             continue
         end
         a = π[s]
@@ -603,16 +642,17 @@ function reachability(ℳ::SOMDP, δ::Int, 𝒮::LAOStarSolver)
             push!(visited, s′)
         end
     end
-    count = 0
-    for (s, state) in enumerate(S)
-        if length(state.action_list) == δ
-            count += 1
-        end
-    end
+    # count = 0
+    # for (s, state) in enumerate(S)
+    #     if length(state.action_list) == δ
+    #         count += 1
+    #     end
+    # end
 
-    println("Reachable max depth states under optimal policy: $(length(reachable_max_depth))")
+    println("Reachable max depth states under optimal policy: $reachable_max_depths")
     # println("Percent of total max depth states reachable under optimal policy: $(length(reachable_max_depth)/(length(S) * (length(A)^δ)))")
-    println("Percent of total max depth states reachable under optimal policy: $(100*length(reachable_max_depth)/count)")
+    println("Percent of total max depth states reachable under optimal policy: $(100.0*length(reachable_max_depth)/denominator)")
+    return reachable_states
 end
 
 function action_change_experiment(ℳ₁, ℳ₂, 𝒮₁, 𝒮₂)
@@ -665,6 +705,8 @@ function run_experiment_script()
 
     println("Building MDP...")
     M = build_model(MAP_PATH, INIT, GOAL)
+    println("String buffer")
+    println("Number of states: $(length(M.S))")
     println("Solving MDP...")
     𝒱 = solve_model(M)
     println(index(M.s₀, M.S))
@@ -687,8 +729,8 @@ function run_experiment_script()
             # end
             push!(solvers, 𝒮)
 
-            println("\n", ">>>> Evaluating with depth = $(model.δ) and solver = $solver <<<<")
-            simulate(model, 𝒱, 𝒮, SIM_COUNT, VERBOSE)
+            # println("\n", ">>>> Evaluating with depth = $(model.δ) and solver = $solver <<<<")
+            # simulate(model, 𝒱, 𝒮, SIM_COUNT, VERBOSE)
 
             reachability(model, model.δ, 𝒮)
 
@@ -699,5 +741,5 @@ function run_experiment_script()
 end
 
 run_experiment_script()
-
+#
 run_somdp()

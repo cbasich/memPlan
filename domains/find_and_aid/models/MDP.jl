@@ -294,7 +294,7 @@ function generate_rewards(S::Vector{DomainState},
     R = [[-.1 for (i, _) in enumerate(A)]
                for (j, _) in enumerate(S)]
 
-    aid_idx = -1 
+    aid_idx = -1
     for (a, action) ∈ enumerate(A)
         if action.value == "aid"
             @assert aid_idx == -1
@@ -381,15 +381,15 @@ end
 function simulate(ℳ::MDP, 𝒱::ValueIterationSolver)
     S, A, R = ℳ.S, ℳ.A, ℳ.R
     rewards = Vector{Float64}()
-    for i=1:1
+    for i=1:100
         r = 0.0
         state = ℳ.s₀
-        println("Expected reward: $(𝒱.V[index(state, S)])")
+        # println("Expected reward: $(𝒱.V[index(state, S)])")
         while true
             s = index(state, S)
             a = 𝒱.π[s]
             r += R[s][a]
-            println("Taking action $(A[a]) in state $state with reward $(R[s][a])")
+            # println("Taking action $(A[a]) in state $state with reward $(R[s][a])")
             state = generate_successor(ℳ, s, a)
             # t += 1
             if terminal(state)
@@ -409,10 +409,13 @@ function run_MDP()
     people_locations = [(7, 19), (10, 12), (6, 2)]
     # people_locations = [(2,2), (4,7), (3,8)]
     ℳ = build_model(domain_map_file, people_locations)
-    println(" ")
+    println("Why not printing?")
+    println("Number of states: $(length(ℳ.S))")
     println("Solving Model...")
-    𝒱 = @time solve_model(ℳ)
-    simulate(ℳ, 𝒱)
+    to = TimerOutput()
+    𝒱 = @timeit to "times" solve_model(ℳ)
+    println("Expected reward is: $(𝒱.V[index(ℳ.s₀, ℳ.S)])")
+    # simulate(ℳ, 𝒱)
+    show(to)
 end
-
 # run_MDP()

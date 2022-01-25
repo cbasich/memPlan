@@ -49,6 +49,18 @@ end
 #     ℒ.π[s] = a
 #     return residual
 # end
+# function lookahead(ℒ::LAOStarSolver,
+#                    M,
+#                    s::Integer,
+#                    a::Integer)
+#     S, A, T, R, H, V = M.S, M.A, M.T[s][a], M.R, M.H, ℒ.V
+#
+#     q = 0.
+#     for (s′, p) in T
+#         q += p * V[s′]
+#     end
+#     return q + R(M,s,a)
+# end
 
 function lookahead(ℒ::LAOStarSolver,
                    𝒱::ValueIterationSolver,
@@ -61,8 +73,8 @@ function lookahead(ℒ::LAOStarSolver,
     for (s′, p) in T
         if haskey(ℒ.π, s′)
             q += p * V[s′]
-        else
-            q += p * H(M, 𝒱.V, s, a)
+        # else
+        #     q += p * H(M, 𝒱.V, s, a)
         end
     end
     return q + R(M,s,a)

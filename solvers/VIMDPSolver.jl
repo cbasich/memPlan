@@ -13,7 +13,7 @@ end
 
 function lookahead(𝒱::ValueIterationSolver, M, s::Integer, a::Integer)
     S, T, R, V = M.S, M.T, M.R, 𝒱.V
-    return R[s][a] + .95*sum(T[s][a][s′] * V[s′] for s′=1:length(S))
+    return R[s][a] + .99*sum(T[s][a][s′] * V[s′] for s′=1:length(S))
 end
 
 function backup(𝒱::ValueIterationSolver, M, s::Integer)

@@ -199,7 +199,7 @@ function solve(ℱ::FLARESSolver,
 
     trials = 0
     while (!labeled_solved(ℱ,s) && trials < ℱ.max_trials)
-        println("trial: ", trials)
+        # println("trial: ", trials)
         trial(ℱ, 𝒱, M, s)
         trials += 1
     end

@@ -7,11 +7,11 @@ include("SOMDP.jl")
 δ = 1
 
 
-# ================= DOMAIN CONFIGURATION BEGIN ================= 
+# ================= DOMAIN CONFIGURATION BEGIN =================
 
 MAP_PATH = joinpath(@__DIR__, "..", "maps", "two_buildings.txt")
 
-# ================= DOMAIN CONFIGURATION END ================= 
+# ================= DOMAIN CONFIGURATION END =================
 
 
 struct CampusPOMDP <: POMDP{DomainState, DomainAction, DomainState}
@@ -64,9 +64,9 @@ end
 
 POMDPs.states(pomdp::CampusPOMDP) = ℳ.M.S
 POMDPs.actions(pomdp::CampusPOMDP) = A
-POMDPs.observations(pomdp::CampusPOMDP) = Ω 
+POMDPs.observations(pomdp::CampusPOMDP) = Ω
 POMDPs.isterminal(pomdp::CampusPOMDP, s::DomainState) = s == pomdp.ℳ.M.g
-POMDPs.discount(pomdp::CampusPOMDP) = 1
+POMDPs.discount(pomdp::CampusPOMDP) = .9
 POMDPs.initialstate(pomdp::CampusPOMDP) = Deterministic(pomdp.ℳ.M.s₀)
 POMDPs.stateindex(pomdp::CampusPOMDP, state::DomainState) = pomdp.ℳ.M.Sindex[state]
 POMDPs.actionindex(pomdp::CampusPOMDP, action::DomainAction) =
@@ -90,23 +90,23 @@ m = CampusPOMDP(ℳ)
 
 
 
-# ================= SOLVER CONFIGURATION BEGIN ================= 
+# ================= SOLVER CONFIGURATION BEGIN =================
 
 @time begin
-    #solver = QMDPSolver(SparseValueIterationSolver(max_iterations=1000, belres=1e-3,verbose=false))
-    solver = SARSOPSolver()
-    #solver = PBVISolver(verbose=true)
+    # solver = QMDPSolver(SparseValueIterationSolver(max_iterations=1000, belres=1e-3,verbose=false))
+    # solver = SARSOPSolver()
+    solver = PBVISolver(verbose=true)
     policy = @time SARSOP.solve(solver, m)
 end
 
 
-# ================= SOLVER CONFIGURATION END ================= 
+# ================= SOLVER CONFIGURATION END =================
 
 rsum = 0.0
 rewards = Vector{Float64}()
 
 for i in 1:100
-    println(i)
+    # println(i)
     global rsum = 0.0
     for (s,b,a,o,r) in stepthrough(m, policy, "s,b,a,o,r", max_steps=100)
 #        println("s: $s, a: $a, o: $o, r: $r")
