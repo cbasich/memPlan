@@ -1,5 +1,5 @@
 using POMDPs, POMDPModelTools, QMDP, SARSOP, PointBasedValueIteration, POMDPSimulators, DiscreteValueIteration
-
+using POMDPs, BasicPOMCP, POMDPModelTools, ARDESPOT
 include("SOMDP.jl")
 
 
@@ -93,10 +93,14 @@ m = CampusPOMDP(ℳ)
 # ================= SOLVER CONFIGURATION BEGIN =================
 
 @time begin
-    # solver = QMDPSolver(SparseValueIterationSolver(max_iterations=1000, belres=1e-3,verbose=false))
+    #solver = QMDPSolver(SparseValueIterationSolver(max_iterations=1000, belres=1e-3,verbose=true))
     # solver = SARSOPSolver()
-    solver = PBVISolver(verbose=true)
-    policy = @time SARSOP.solve(solver, m)
+    #solver = PBVISolver(verbose=true)
+    solver = POMCPSolver()
+    planner = BasicPOMCP.solve(solver, m)
+    # solver = DESPOTSolver(bounds=(-20.0, 0.0))
+    # planner = ARDESPOT.solve(solver, m)
+    # policy = @time SARSOP.solve(solver, m)
 end
 
 
@@ -105,11 +109,17 @@ end
 rsum = 0.0
 rewards = Vector{Float64}()
 
-for i in 1:100
-    # println(i)
+@time for i in 1:100
+    println(i)
     global rsum = 0.0
-    for (s,b,a,o,r) in stepthrough(m, policy, "s,b,a,o,r", max_steps=100)
-#        println("s: $s, a: $a, o: $o, r: $r")
+#     for (s,b,a,o,r) in stepthrough(m, policy, "s,b,a,o,r", max_steps=100)
+# #        println("s: $s, a: $a, o: $o, r: $r")
+#         global rsum += r
+#     end
+    for (s,a,o) in BasicPOMCP.stepthrough(m, planner, "s,a,o", max_steps=100)
+        # println("s: $s, a: $a, o: $o")
+        r = POMDPs.reward(m, s, a)
+        println(r)
         global rsum += r
     end
     push!(rewards, rsum)

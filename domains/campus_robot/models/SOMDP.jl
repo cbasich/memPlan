@@ -740,6 +740,6 @@ function run_experiment_script()
     show(to, allocations = false)
 end
 
-run_experiment_script()
-#
-run_somdp()
+# run_experiment_script()
+# #
+# run_somdp()
