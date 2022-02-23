@@ -376,11 +376,20 @@ function simulate(ℳ::SOMDP,
                    v::Bool)
     M, S, A, R = ℳ.M, ℳ.S, ℳ.A, ℳ.R
     r = Vector{Float64}()
+    trace_lengths = Vector{Int}()
+    total_states = 0
+    max_depth_states = 0
     # println("Expected cost to goal: $(ℒ.V[index(state, S)])")
     for i ∈ 1:m
         state, true_state = ℳ.s₀, M.s₀
         episode_reward = 0.0
+        trace_length = 0
         while true
+            total_states += 1
+            trace_length += 1
+            if length(state.action_list) == ℳ.δ
+                max_depth_states += 1
+            end
             s = ℳ.Sindex[state]
             a = 𝒮.π[s]
             action = A[a]
@@ -413,10 +422,16 @@ function simulate(ℳ::SOMDP,
             end
         end
         push!(r, episode_reward)
+        push!(trace_lengths, trace_length)
         # println("Episode $i || Total cumulative reward:
         #              $(mean(episode_reward)) ⨦ $(std(episode_reward))")
     end
     # println("Reached the goal.")
+    println("Total states: $(total_states)")
+    println("Max depth states: $(max_depth_states)")
+    println("Likelihood of max depth state: $(max_depth_states/total_states)")
+    println("Average trace length: $(round(mean(trace_lengths);digits=4))")
+    println("Sample average maximum residual: $(mean(trace_lengths) * (max_depth_states/total_states) * 3)")
     println("Total cumulative reward: $(mean(r)) ⨦ $(std(r))")
 end
 #
@@ -555,37 +570,6 @@ function solve(ℳ, 𝒱, solver::String)
 end
 
 # This is for Connor's benefit running in IDE
-
-function run_somdp()
-    ## PARAMS
-    MAP_PATH = joinpath(@__DIR__, "..", "maps", "two_buildings.txt")
-    SOLVER = "laostar"
-    SIM = false
-    SIM_COUNT = 100
-    VERBOSE = false
-    DEPTH = 4
-    INIT = 's'
-    GOAL = 'g'
-
-
-    ## MAIN SCRIPT
-    begin
-        println("Building MDP...")
-        M = build_model(MAP_PATH, INIT, GOAL)
-        println(">>>> Number of states: $(length(M.S)) <<<<")
-        println("Solving MDP...")
-        𝒱 = solve_model(M)
-        println("Building SOMDP...")
-        ℳ = @time build_model(M, DEPTH)
-        println("Solving SOMDP...")
-        solver = solve(ℳ, 𝒱, SOLVER)
-    end
-
-    if SIM
-        println("Simulating...")
-        simulate(ℳ, 𝒱, solver, SIM_COUNT, VERBOSE)
-    end
-end
 
 function reachability(ℳ::SOMDP, δ::Int, 𝒮::LAOStarSolver)
     S, state₀, A, T = ℳ.S, ℳ.s₀, ℳ.A, ℳ.T
@@ -740,6 +724,37 @@ function run_experiment_script()
     show(to, allocations = false)
 end
 
+function run_somdp()
+    ## PARAMS
+    MAP_PATH = joinpath(@__DIR__, "..", "maps", "two_buildings.txt")
+    SOLVER = "laostar"
+    SIM = true
+    SIM_COUNT = 1000
+    VERBOSE = false
+    DEPTH = 5
+    INIT = 's'
+    GOAL = 'g'
+
+
+    ## MAIN SCRIPT
+    begin
+        println("Building MDP...")
+        M = build_model(MAP_PATH, INIT, GOAL)
+        println(">>>> Number of states: $(length(M.S)) <<<<")
+        println("Solving MDP...")
+        𝒱 = solve_model(M)
+        println("Building SOMDP...")
+        ℳ = @time build_model(M, DEPTH)
+        println("Solving SOMDP...")
+        solver = solve(ℳ, 𝒱, SOLVER)
+    end
+
+    if SIM
+        println("Simulating...")
+        simulate(ℳ, 𝒱, solver, SIM_COUNT, VERBOSE)
+    end
+end
+
 # run_experiment_script()
 # #
-# run_somdp()
+run_somdp()
