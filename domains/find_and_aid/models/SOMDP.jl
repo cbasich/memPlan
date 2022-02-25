@@ -396,11 +396,20 @@ function simulate(ℳ::SOMDP,
                    v::Bool)
     M, S, A, R = ℳ.M, ℳ.S, ℳ.A, ℳ.R
     r = Vector{Float64}()
+    trace_lengths = Vector{Int}()
+    total_states = 0
+    max_depth_states = 0
     # println("Expected cost to goal: $(ℒ.V[index(state, S)])")
     for i ∈ 1:m
         state, true_state = ℳ.s₀, M.s₀
         episode_reward = 0.0
+        trace_length = 0
         while true
+            trace_length += 1
+            total_states += 1
+            if length(state.action_list) == ℳ.δ
+                max_depth_states += 1
+            end
             s = index(state, S)
             a = 𝒮.π[s]
             action = A[a]
@@ -431,10 +440,16 @@ function simulate(ℳ::SOMDP,
             end
         end
         push!(r, episode_reward)
+        push!(trace_lengths, trace_length)
         # println("Episode $i || Total cumulative reward:
         #              $(mean(episode_reward)) ⨦ $(std(episode_reward))")
     end
     # println("Reached the goal.")
+    println("Total states: $(total_states)")
+    println("Max depth states: $(max_depth_states)")
+    println("Likelihood of max depth state: $(max_depth_states/total_states)")
+    println("Average trace length: $(round(mean(trace_lengths);digits=4))")
+    println("Sample average maximum residual: $(mean(trace_lengths) * (max_depth_states/total_states) * 0.9)")
     println("Total cumulative reward: $(round(mean(r);digits=4)) ⨦ $(std(r))")
 end
 #
@@ -705,7 +720,7 @@ function run_experiment_script()
     HEURISTICS = ["vstar", "null"]
     SIM_COUNT = 100
     VERBOSE = false
-    REACHABILITY = true
+    REACHABILITY = false
     ## delta = 1 is always done by default so don't add here.
     DEPTHS = [2,3,4]
 
@@ -754,7 +769,7 @@ function run_somdp()
     SIM = true
     SIM_COUNT = 100
     VERBOSE = false
-    DEPTH = 1
+    DEPTH = 2
 
     ## EXPERIMENT FlAGS
     REACHABILITY = false
@@ -774,13 +789,13 @@ function run_somdp()
     println("Building SOMDP...")
     ℳ = @time build_model(M, DEPTH)
     println("Total state: $(length(ℳ.S))")
-    # println("Solving SOMDP...")
-    # solver = @time solve(ℳ, 𝒱, SOLVER)
+    println("Solving SOMDP...")
+    solver = @time solve(ℳ, 𝒱, SOLVER)
 
     if SIM
         println("Simulating...")
-        # simulate(ℳ, 𝒱, solver, SIM_COUNT, VERBOSE)
-        simulate(ℳ, 𝒱, SIM_COUNT, VERBOSE)
+        simulate(ℳ, 𝒱, solver, SIM_COUNT, VERBOSE)
+        # simulate(ℳ, 𝒱, SIM_COUNT, VERBOSE)
     end
 
     ## Experiment Below Here ##
@@ -793,4 +808,4 @@ end
 
 # run_experiment_script()
 # # #
-# run_somdp()
+run_somdp()

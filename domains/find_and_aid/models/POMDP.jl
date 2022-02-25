@@ -1,5 +1,5 @@
 using POMDPs, POMDPModelTools, QMDP, SARSOP, PointBasedValueIteration, POMDPSimulators, DiscreteValueIteration
-using POMDPs, BasicPOMCP, POMDPModelTools, ARDESPOT
+using POMDPs, BasicPOMCP, POMDPModelTools, ARDESPOT, ParticleFilters
 
 include("SOMDP.jl")
 
@@ -48,6 +48,9 @@ end
 
 function POMDPs.reward(m::FindPOMDP, state::DomainState, action::DomainAction)
     if action.value == "QUERY"
+        if state.x == 0
+            return -1.0*sum(state.𝒫)
+        end
         return -0.2 * sum(state.𝒫)
     else
         s,a = m.ℳ.M.Sindex[state], m.ℳ.M.Aindex[action]
@@ -68,7 +71,7 @@ POMDPs.states(pomdp::FindPOMDP) = ℳ.M.S
 POMDPs.actions(pomdp::FindPOMDP) = A
 POMDPs.observations(pomdp::FindPOMDP) = Ω
 POMDPs.isterminal(pomdp::FindPOMDP, s::DomainState) = terminal(s)
-POMDPs.discount(pomdp::FindPOMDP) = 0.9
+POMDPs.discount(pomdp::FindPOMDP) = .999
 POMDPs.initialstate(pomdp::FindPOMDP) = Deterministic(pomdp.ℳ.M.s₀)
 POMDPs.stateindex(pomdp::FindPOMDP, state::DomainState) = pomdp.ℳ.M.Sindex[state]
 POMDPs.actionindex(pomdp::FindPOMDP, action::DomainAction) =
@@ -98,10 +101,10 @@ m = FindPOMDP(ℳ, PEOPLE_LOCATIONS)
     #solver = QMDPSolver(SparseValueIterationSolver(max_iterations=1000, belres=1e-3,verbose=true))
     # solver = SARSOPSolver()
     #solver = PBVISolver(verbose=true)
-    solver = POMCPSolver()
-    planner = BasicPOMCP.solve(solver, m)
-    # solver = DESPOTSolver(bounds=(-20.0, 0.0))
-    # planner = ARDESPOT.solve(solver, m)
+    # solver = POMCPSolver()
+    # planner = BasicPOMCP.solve(solver, m)
+    solver = DESPOTSolver(bounds=(-20.0, 0.0))
+    planner = ARDESPOT.solve(solver, m)
     # policy = @time SARSOP.solve(solver, m)
 end
 
@@ -111,14 +114,18 @@ end
 rsum = 0.0
 rewards = Vector{Float64}()
 
-@time for i in 1:100
-    println(i)
+@time for i in 1:1
+    # println(i)
     global rsum = 0.0
+    # filter = BootstrapFilter(m, 1000)
     for (s,a,o) in BasicPOMCP.stepthrough(m, planner, "s,a,o", max_steps=100)
-        # println("s: $s, a: $a, o: $o")
+        println("s: $s, a: $a, o: $o")
         r = POMDPs.reward(m, s, a)
+        println("r: $r")
         global rsum += r
     end
     push!(rewards, rsum)
+    # println("nonse")
 end
 println("Average reward: $(mean(rewards)) ⨦ $(std(rewards))")
+println(rewards)
