@@ -305,8 +305,9 @@ function generate_rewards(S::Vector{DomainState},
     for (s, state) in enumerate(S)
         R[s] *= sum(state.𝒫)
         if state.x == 0
-            manhattan = abs(state.x - state₀.x) + abs(state.y - state₀.y)
-            R[s] *= (2 * manhattan * sum(state.𝒫))
+            R[s] *= 10
+            # manhattan = abs(state.x - state₀.x) + abs(state.y - state₀.y)
+            # R[s] *= (2 * manhattan * sum(state.𝒫))
             # R[s] .-= 2.0 * ceil(sqrt(length(S)))
         end
         if (state.x, state.y) ∉ people_locations
