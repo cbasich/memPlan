@@ -25,6 +25,5 @@ docs/site/
 
 *.py
 *.png
-*.txt
 *.out
 *.pomdpx

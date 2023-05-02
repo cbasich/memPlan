@@ -1,6 +1,6 @@
-using POMDPs, POMDPModelTools, QMDP, SARSOP, PointBasedValueIteration, POMDPSimulators, DiscreteValueIteration
-using POMDPs, BasicPOMCP, POMDPModelTools, ARDESPOT, ParticleFilters
-
+using POMDPs, POMDPModelTools, QMDP, SARSOP, PointBasedValueIteration
+using POMDPSimulators, DiscreteValueIteration
+using Infiltrator, LinearAlgebra
 include("SOMDP.jl")
 
 
@@ -10,9 +10,9 @@ include("SOMDP.jl")
 
 # ================= DOMAIN CONFIGURATION BEGIN =================
 
-domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
-# PEOPLE_LOCATIONS = [(2,2), (4,7), (3,8)] # COLLAPSE 1
-PEOPLE_LOCATIONS = [(7, 19), (10, 12), (6, 2)] # COLLAPSE 2
+domain_map_file = joinpath(@__DIR__, "..", "maps", "collapse_1.txt")
+PEOPLE_LOCATIONS = [(2,2), (4,7), (3,8)] # COLLAPSE 1
+# PEOPLE_LOCATIONS = [(7, 19), (10, 12), (6, 2)] # COLLAPSE 2
 
 # ================= DOMAIN CONFIGURATION END =================
 
@@ -96,36 +96,43 @@ m = FindPOMDP(ℳ, PEOPLE_LOCATIONS)
 
 
 # ================= SOLVER CONFIGURATION BEGIN =================
+SOLVER = "SARSOP"             # Change this to select solver.
 
 @time begin
-    solver = QMDPSolver(SparseValueIterationSolver(max_iterations=1000, belres=1e-3,verbose=true))
-    # solver = SARSOPSolver()
-    # solver = PBVISolver(verbose=true)
-    # solver = POMCPSolver()
-    # planner = BasicPOMCP.solve(solver, m)
-    solver = DESPOTSolver(bounds=(-20.0, 0.0))
-    planner = ARDESPOT.solve(solver, m)
-    # policy = @time SARSOP.solve(solver, m)
+    if SOLVER == "QMDP"
+        solver = QMDPSolver(SparseValueIterationSolver(max_iterations=1000,
+                                                  belres=1e-3,verbose=true))
+    elseif SOLVER == "SARSOP"
+        solver = SARSOPSolver()
+    elseif SOLVER == "PBVI"
+        solver = PBVISolver(verbose=true)
+    end
+
+    policy = @time SARSOP.solve(solver, m)
 end
-
-
 # ================= SOLVER CONFIGURATION END =================
 
+# ================= RUN POLICY ON POMDP ======================
 rsum = 0.0
 rewards = Vector{Float64}()
 
 @time for i in 1:10
-    # println(i)
     global rsum = 0.0
-    for (s,a,o) in stepthrough(m, planner, "s,a,o", max_steps=1000)
-    # for (s,b,a,o,r) in stepthrough(m, policy, "s,b,a,o,r", max_steps=100)
+    for (s,b,a,o,r) in stepthrough(m, policy, "s,b,a,o,r", max_steps=100)
         println("s: $s, a: $a, o: $o")
         r = POMDPs.reward(m, s, a)
         global rsum += r
+
+        ### To inspect alpha vector information, uncomment below:
+        # alphas = policy.alphas
+        # belief = b.b
+        #
+        # alpha_values = [dot(α, belief) for α in alphas]
+        # best_action = argmax(alpha_values)
+        #
+        # println("Returning best action: $(policy.action_map[best_action] == a)")
     end
-    # println(s)
     push!(rewards, rsum)
-    # println("nonse")
 end
+
 println("Average reward: $(mean(rewards)) ⨦ $(std(rewards))")
-println(rewards)

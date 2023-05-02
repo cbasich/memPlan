@@ -1,0 +1,64 @@
+Find and AID
+POMCP
+1020.013665 seconds (8.65 G allocations: 235.376 GiB, 2.09% gc time)
+Average reward: -567.9020000000007 ⨦ 304.7860776467206
+
+DESPOT
+10198.804884 seconds (88.22 G allocations: 2.561 TiB, 2.41% gc time)
+Average reward: -60.59400000000011 ⨦ 5.940000000000009
+
+
+
+
+CDR
+
+POMCP
+336.877710 seconds (4.85 G allocations: 154.548 GiB, 5.60% gc time)
+Average reward: -100.42 ⨦ 1.248676066556863
+
+3667.728875 seconds (48.30 G allocations: 1.503 TiB, 4.93% gc time)
+Average reward: -1000.88 ⨦ 2.016497613750789
+
+DESPOT
+10049.898921 seconds (197.44 G allocations: 6.895 TiB, 10.66% gc time)
+Average reward: -100.0 ⨦ 0.0
+
+
+
+
+
+
+
+CAMPUS DELIVERY D=1
+Likelihood of max depth state: 0.27052738108624763
+Average trace length: 44.465
+Sample average maximum residual: 36.087
+CAMPUS DELIVERY D=2
+Likelihood of max depth state: 0.10740731117981761
+Average trace length: 38.489
+Sample average maximum residual: 12.401999999999997
+CAMPUS DELIVERY D=3
+Likelihood of max depth state: 0.04659361079987976
+Average trace length: 36.593
+Sample average maximum residual: 5.115000000000001
+CAMPUS DELIVERY D=4
+Likelihood of max depth state: 0.02868932444865754
+Average trace length: 35.867
+Sample average maximum residual: 3.0869999999999997
+
+DISASTER RELIEF D=1
+Likelihood of max depth state: 0.20560652047880504
+Average trace length: 87.969
+Sample average maximum residual: 16.2783
+DISASTER RELIEF D=2
+Likelihood of max depth state: 0.050680625649631196
+Average trace length: 79.853
+Sample average maximum residual: 3.6422999999999996
+DISASTER RELIEF D=3
+Likelihood of max depth state: 0.011433189171393084
+Average trace length: 66.823
+Sample average maximum residual: 0.6875999999999999
+DISASTER RELIEF D=4
+Likelihood of max depth state: 0.002894486906969382
+Average trace length: 66.333
+Sample average maximum residual: 0.1728
