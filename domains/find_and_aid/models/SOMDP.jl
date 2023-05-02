@@ -767,9 +767,9 @@ function run_somdp()
     MAP_PATH = joinpath(@__DIR__, "..", "maps", "collapse_2.txt")
     SOLVER = "laostar"
     SIM = true
-    SIM_COUNT = 100
+    SIM_COUNT = 1000
     VERBOSE = false
-    DEPTH = 2
+    DEPTH = 4
 
     ## EXPERIMENT FlAGS
     REACHABILITY = false
@@ -808,4 +808,4 @@ end
 
 # run_experiment_script()
 # # #
-run_somdp()
+# run_somdp()

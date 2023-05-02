@@ -1,5 +1,5 @@
 using POMDPs, POMDPModelTools, QMDP, SARSOP, PointBasedValueIteration, POMDPSimulators, DiscreteValueIteration
-using POMDPs, BasicPOMCP, POMDPModelTools, ARDESPOT
+using POMDPs, BasicPOMCP, POMDPModelTools, ARDESPOT, ParticleFilters
 include("SOMDP.jl")
 
 
@@ -109,19 +109,21 @@ end
 rsum = 0.0
 rewards = Vector{Float64}()
 
-@time for i in 1:100
+@time for i in 1:10
     println(i)
     global rsum = 0.0
 #     for (s,b,a,o,r) in stepthrough(m, policy, "s,b,a,o,r", max_steps=100)
 # #        println("s: $s, a: $a, o: $o, r: $r")
 #         global rsum += r
 #     end
-    for (s,a,o) in BasicPOMCP.stepthrough(m, planner, "s,a,o", max_steps=100)
+    filter = BootstrapFilter(m, 10)
+    for (s,a,o) in BasicPOMCP.stepthrough(m, planner, filter, "s,a,o", max_steps=1000)
         # println("s: $s, a: $a, o: $o")
         r = POMDPs.reward(m, s, a)
-        println(r)
+        # println(r)
         global rsum += r
     end
+    # println(s)
     push!(rewards, rsum)
 end
 println("Average reward: $(mean(rewards)) ⨦ $(std(rewards))")

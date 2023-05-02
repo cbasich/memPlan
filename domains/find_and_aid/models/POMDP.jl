@@ -71,7 +71,7 @@ POMDPs.states(pomdp::FindPOMDP) = ℳ.M.S
 POMDPs.actions(pomdp::FindPOMDP) = A
 POMDPs.observations(pomdp::FindPOMDP) = Ω
 POMDPs.isterminal(pomdp::FindPOMDP, s::DomainState) = terminal(s)
-POMDPs.discount(pomdp::FindPOMDP) = .999
+POMDPs.discount(pomdp::FindPOMDP) = .9
 POMDPs.initialstate(pomdp::FindPOMDP) = Deterministic(pomdp.ℳ.M.s₀)
 POMDPs.stateindex(pomdp::FindPOMDP, state::DomainState) = pomdp.ℳ.M.Sindex[state]
 POMDPs.actionindex(pomdp::FindPOMDP, action::DomainAction) =
@@ -98,9 +98,9 @@ m = FindPOMDP(ℳ, PEOPLE_LOCATIONS)
 # ================= SOLVER CONFIGURATION BEGIN =================
 
 @time begin
-    #solver = QMDPSolver(SparseValueIterationSolver(max_iterations=1000, belres=1e-3,verbose=true))
+    solver = QMDPSolver(SparseValueIterationSolver(max_iterations=1000, belres=1e-3,verbose=true))
     # solver = SARSOPSolver()
-    #solver = PBVISolver(verbose=true)
+    # solver = PBVISolver(verbose=true)
     # solver = POMCPSolver()
     # planner = BasicPOMCP.solve(solver, m)
     solver = DESPOTSolver(bounds=(-20.0, 0.0))
@@ -114,16 +114,16 @@ end
 rsum = 0.0
 rewards = Vector{Float64}()
 
-@time for i in 1:1
+@time for i in 1:10
     # println(i)
     global rsum = 0.0
-    # filter = BootstrapFilter(m, 1000)
-    for (s,a,o) in BasicPOMCP.stepthrough(m, planner, "s,a,o", max_steps=100)
+    for (s,a,o) in stepthrough(m, planner, "s,a,o", max_steps=1000)
+    # for (s,b,a,o,r) in stepthrough(m, policy, "s,b,a,o,r", max_steps=100)
         println("s: $s, a: $a, o: $o")
         r = POMDPs.reward(m, s, a)
-        println("r: $r")
         global rsum += r
     end
+    # println(s)
     push!(rewards, rsum)
     # println("nonse")
 end
