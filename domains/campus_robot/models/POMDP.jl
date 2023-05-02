@@ -1,15 +1,15 @@
-using POMDPs, POMDPModelTools, QMDP, SARSOP, PointBasedValueIteration, POMDPSimulators, DiscreteValueIteration
-using POMDPs, BasicPOMCP, POMDPModelTools, ARDESPOT, ParticleFilters
-include("SOMDP.jl")
+using POMDPs, POMDPModelTools, QMDP, SARSOP, PointBasedValueIteration
+using POMDPSimulators, DiscreteValueIteration
+using Infiltrator, LinearAlgebra
 
+include("SOMDP.jl")
 
 #constants
 δ = 1
 
-
 # ================= DOMAIN CONFIGURATION BEGIN =================
 
-MAP_PATH = joinpath(@__DIR__, "..", "maps", "two_buildings.txt")
+MAP_PATH = joinpath(@__DIR__, "..", "maps", "single_building.txt")
 
 # ================= DOMAIN CONFIGURATION END =================
 
@@ -91,16 +91,19 @@ m = CampusPOMDP(ℳ)
 
 
 # ================= SOLVER CONFIGURATION BEGIN =================
+SOLVER = "SARSOP"             # Change this to select solver.
 
 @time begin
-    #solver = QMDPSolver(SparseValueIterationSolver(max_iterations=1000, belres=1e-3,verbose=true))
-    # solver = SARSOPSolver()
-    #solver = PBVISolver(verbose=true)
-    solver = POMCPSolver()
-    planner = BasicPOMCP.solve(solver, m)
-    # solver = DESPOTSolver(bounds=(-20.0, 0.0))
-    # planner = ARDESPOT.solve(solver, m)
-    # policy = @time SARSOP.solve(solver, m)
+    if SOLVER == "QMDP"
+        solver = QMDPSolver(SparseValueIterationSolver(max_iterations=1000,
+                                                  belres=1e-3,verbose=true))
+    elseif SOLVER == "SARSOP"
+        solver = SARSOPSolver()
+    elseif SOLVER == "PBVI"
+        solver = PBVISolver(verbose=true)
+    end
+
+    policy = @time SARSOP.solve(solver, m)
 end
 
 
@@ -110,20 +113,20 @@ rsum = 0.0
 rewards = Vector{Float64}()
 
 @time for i in 1:10
-    println(i)
     global rsum = 0.0
-#     for (s,b,a,o,r) in stepthrough(m, policy, "s,b,a,o,r", max_steps=100)
-# #        println("s: $s, a: $a, o: $o, r: $r")
-#         global rsum += r
-#     end
-    filter = BootstrapFilter(m, 10)
-    for (s,a,o) in BasicPOMCP.stepthrough(m, planner, filter, "s,a,o", max_steps=1000)
-        # println("s: $s, a: $a, o: $o")
-        r = POMDPs.reward(m, s, a)
-        # println(r)
+    for (s,b,a,o,r) in stepthrough(m, policy, "s,b,a,o,r", max_steps=100)
+        println("s: $s, a: $a, o: $o, r: $r")
         global rsum += r
+
+        ### To inspect alpha vector information, uncomment below:
+        # alphas = policy.alphas
+        # belief = b.b
+        #
+        # alpha_values = [dot(α, belief) for α in alphas]
+        # best_action = argmax(alpha_values)
+        #
+        # println("Returning best action: $(policy.action_map[best_action] == a)")
     end
-    # println(s)
     push!(rewards, rsum)
 end
 println("Average reward: $(mean(rewards)) ⨦ $(std(rewards))")
